@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.7`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.8`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
 
 ## 所有平台先准备
 
@@ -26,7 +26,7 @@
 
 Windows PowerShell 5.1 会被 `#Requires -Version 7.0` 拒绝。如果下载文件被本机策略阻止，先检查脚本来源并按所在设备的执行策略处理；脚本不会修改执行策略。
 
-虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.7/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.8/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
 `work/build_windows.py` 现在直接整理完整测试目录。原作者的 `work/build_release.py` 保留作历史发行包整理参考，以上入口不调用它，也不生成 GitHub Release。
 
@@ -86,6 +86,12 @@ Linux 的全屏自动检测及跟随 Codex 启动未接入；不要把 Windows�
 已安装依赖的虚拟环境也可以直接运行对应的 `work/build_windows.py`、`work/build_macos.py` 或 `work/build_linux.py --family debian`，均支持 `--ffmpeg`，并拒绝在错误的操作系统构建。程序入口不变，仍是 `app/pet.py`。
 
 打包资源内的 `BUILD_INFO.json` 记录分支版本、Python、平台、架构和素材文件数量，不包含本机用户名或绝对路径。仓库根目录旧 `BUILD_INFO.json` 与 `RELEASE_NOTES.md` 是作者 v0.5.1 的历史记录，不代表这次构建。
+
+## 性能统计范围
+
+“桌宠运行内存 (RAM) 合计”只包括主进程与 FFmpeg，macOS 两项均为物理占用，Windows／Linux 为 RSS。Codex app-server 及其启动的 Node／Python 等工具进程不计入；它不是整个进程树合计。CPU 行分别标明主进程与解码进程，GPU 保留应用组口径，不能将不同范围的数值混作同一总量。
+
+浮窗显示 CPU／GPU 型号、桌面端与内置 CLI 的 PID／路径／会话状态。硬件查询仅在窗口打开时发起一次，关闭取消；Windows 通过系统 PowerShell 的 CIM 查询，Linux GPU 型号通过 lspci 获取（发行版 pciutils 包）。macOS 按应用 Bundle ID 识别桌面端，Windows 当前识别 Microsoft Store 安装路径，Linux 明确显示尚未接入桌面端识别。候选 CLI 路径与实际运行进程分开标注，不为统计发起 Codex 请求。
 
 ## 实机验收记录
 

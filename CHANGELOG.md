@@ -2,6 +2,12 @@
 
 原作者基线保持 `0.5.1`。从本轮起，反哺分支使用 `0.5.1-opt.N`，`N` 为递增迭代号；它是 SemVer 预发布版本，不代表原作者发布了新版本。此前 `+optimization.N` 为构建元数据，不参与 SemVer 排序。
 
+## 0.5.1-opt.8 · 2026-11-07
+
+- 性能统计按确认后的“桌宠自身”口径，明确标为“桌宠运行内存 (RAM) 合计”，范围为主进程 + FFmpeg，不包含 Codex app-server 及其工具子进程，不称为整个应用进程树总量。
+- 补充 CPU／GPU 具体型号；硬件查询异步执行，成功后复用结果，关闭浮窗取消尚未完成的查询。macOS 使用系统接口，Windows 使用 CIM，Linux 使用 cpuinfo／lspci；缺失与错误按实际状态显示。
+- 增加 Codex 桌面端、内置 CLI 的 PID／实际执行路径／会话就绪状态与额度查询状态；未启动的 CLI 路径标记为候选，不冒充正在运行的连接。
+
 ## 0.5.1-opt.7 · 2026-11-07
 
 - 新增根目录 Windows PowerShell 7+、macOS Bash、Debian／Ubuntu、Fedora／RHEL、Arch 构建入口；各自使用独立构建虚拟环境，支持显式指定 Python 和 FFmpeg。

@@ -2,12 +2,12 @@
 
 基于 [jingh12312-rgb/bailong-desktop-pet](https://github.com/jingh12312-rgb/bailong-desktop-pet) 的 `b102e73 / v0.5.1`，保留 Python + PySide6 + FFmpeg 和作者原始素材。与独立 Swift/AppKit 项目分开维护。
 
-当前版本 **0.5.1-opt.7**，分支 **joseph/optimization**。作者版本号保留，`opt.N` 是本分支的 SemVer 预发布迭代号。私人源码仓库：[Joseph-Blue/bailong-desktop-pet-optimization](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization)。**本仓库不提供 Release，也不上传构建产物或动画素材。**
+当前版本 **0.5.1-opt.8**，分支 **joseph/optimization**。作者版本号保留，`opt.N` 是本分支的 SemVer 预发布迭代号。私人源码仓库：[Joseph-Blue/bailong-desktop-pet-optimization](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization)。**本仓库不提供 Release，也不上传构建产物或动画素材。**
 
 ## 本分支的变化
 
 - 动画按需解码，默认最多预读当前动作 24 帧，取消启动时全素材常驻；保留 FFmpeg 的 VP9 透明解码。
-- 性能设置支持画质与缓冲帧数；性能统计提供 FPS、CPU、运行内存 (RAM) 分项和主进程 + FFmpeg 合计。
+- 性能设置支持画质与缓冲帧数；性能统计提供 FPS、CPU、CPU／GPU 型号和桌宠运行内存 (RAM) 分项与合计。内存范围为主进程 + FFmpeg，不含 Codex 及其工具子进程；桌面端与内置 CLI 的状态另列。
 - macOS 窗口置顶、跨 Space、独立历史目录、Codex 可执行文件定位及 Command 提示修正。
 - 桌宠自有对话与 Codex 只读同步记录区分，避免误恢复外部占用的会话。
 - Windows、macOS 和三类 Linux 构建入口随源码维护。

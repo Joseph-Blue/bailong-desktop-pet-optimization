@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
 
 from performance_metrics import (PlaybackStatistics, ProcessStatistics,
                                  byte_text, frame_cache_statistics)
+from diagnostic_identity import HardwareProbe, desktop_status, cli_status
 from version import VERSION
 
 
@@ -61,6 +62,8 @@ class DiagnosticsWindow(QWidget):
         self.setMinimumSize(440, 360)
         self.changing_pin = False
         self.statistics = ProcessStatistics()
+        self.hardware = HardwareProbe(self)
+        self.hardware.changed.connect(self.update_identity)
         self.frames = PlaybackStatistics(time.monotonic())
         self.previous = None
         self.decoder_previous = None
@@ -69,6 +72,7 @@ class DiagnosticsWindow(QWidget):
         self.timer.setInterval(1000)
         self.timer.timeout.connect(self.sample)
         QApplication.instance().aboutToQuit.connect(self.timer.stop)
+        QApplication.instance().aboutToQuit.connect(self.hardware.stop)
 
         outer = QVBoxLayout(self)
         scroll = QScrollArea()
@@ -96,11 +100,7 @@ class DiagnosticsWindow(QWidget):
         self.resources = self.add_text(content)
         self.identity = self.add_text(content)
         self.connections = self.add_text(content)
-        self.identity.setText(
-            f'版本 {VERSION} · {platform.machine()}\n'
-            f'进程 {os.path.basename(sys.executable)} · PID {os.getpid()}\n'
-            f'CPU {platform.processor() or platform.machine()} · '
-            f'{self.statistics.cores} 个逻辑核心\n{platform.platform()}')
+        self.update_identity()
         content.addStretch()
         scroll.setWidget(body)
         outer.addWidget(scroll, 1)
@@ -135,6 +135,7 @@ class DiagnosticsWindow(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self.hardware.start()
         if not self.timer.isActive():
             self.previous = self.statistics.read()
             self.decoder_previous = None
@@ -153,10 +154,12 @@ class DiagnosticsWindow(QWidget):
     def hideEvent(self, event):
         if not self.changing_pin:
             self.timer.stop()
+            self.hardware.stop()
         super().hideEvent(event)
 
     def closeEvent(self, event):
         self.timer.stop()
+        self.hardware.stop()
         super().closeEvent(event)
 
     def toggle_pin(self, enabled):
@@ -229,7 +232,8 @@ class DiagnosticsWindow(QWidget):
         total_ram = (process.ram + decoder_ram
                      if process.ram is not None and decoder_ram is not None else None)
         self.resources.setText(
-            f'运行内存 (RAM) 合计 · {ram_scope} {byte_text(total_ram)}（主进程 + FFmpeg）\n'
+            f'桌宠运行内存 (RAM) 合计 · {ram_scope} {byte_text(total_ram)}\n'
+            '范围：主进程 + FFmpeg；不含 Codex 及其工具子进程\n'
             f'主进程 {cpu_text}\n主进程运行内存 (RAM) · {ram_scope} {ram}\n'
             f'{decoder_text}\n'
             f'GPU（应用组）{gpu_text}\n'
@@ -242,9 +246,19 @@ class DiagnosticsWindow(QWidget):
         watching = '观察中' if sync.timer.isActive() else '已停止'
         worker = pet.chat.worker if pet.chat else None
         self.connections.setText(
+            f'桌面端 {desktop_status()}\n'
             f'只读同步 {watching} · 执行中 {len(sync.running)} · 已观察 {len(sync.known)}\n'
             f'连续读取失败 {sync.errors} 次\n'
+            f'{cli_status(pet)}\n'
+            f'额度查询 {"执行中" if pet.quota_inflight else "空闲"}\n'
             f'内置任务 {"执行中" if worker and worker.isRunning() else "空闲"}')
+
+    def update_identity(self):
+        self.identity.setText(
+            f'版本 {VERSION} · {platform.machine()}\n'
+            f'进程 {os.path.basename(sys.executable)} · PID {os.getpid()}\n'
+            f'CPU {self.hardware.cpu} · {self.statistics.cores} 个逻辑核心\n'
+            f'GPU {self.hardware.gpu}\n{platform.platform()}')
 
     def decoder_text(self,pid):
         if pid is None:
