@@ -20,10 +20,15 @@ def configure_mac_window(widget):
     if sys.platform!='darwin':return
     try:
         import objc
-        from AppKit import NSWindowCollectionBehaviorCanJoinAllSpaces,NSWindowCollectionBehaviorFullScreenAuxiliary
+        from AppKit import (NSWindowCollectionBehaviorCanJoinAllSpaces,
+                            NSWindowCollectionBehaviorMoveToActiveSpace,
+                            NSWindowCollectionBehaviorFullScreenAuxiliary)
         view=objc.objc_object(c_void_p=int(widget.winId()))
         window=view.window()
-        window.setCollectionBehavior_(window.collectionBehavior()|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
+        # Qt tool windows can start with MoveToActiveSpace. AppKit rejects
+        # combining it with CanJoinAllSpaces; retain unrelated Qt flags.
+        behavior=window.collectionBehavior() & ~NSWindowCollectionBehaviorMoveToActiveSpace
+        window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
     except (ImportError,AttributeError,ValueError):pass
 
 def mac_fullscreen():

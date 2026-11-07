@@ -2,5 +2,5 @@
 # each local iteration (0.5.1+optimization.1, 0.5.1+optimization.2, ...).
 BASE_VERSION = '0.5.1'
 BRANCH = 'joseph/optimization'
-BRANCH_REVISION = 1
+BRANCH_REVISION = 2
 VERSION = f'{BASE_VERSION}+optimization.{BRANCH_REVISION}'
