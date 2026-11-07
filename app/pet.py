@@ -8,7 +8,7 @@ from PySide6.QtGui import QImage, QPixmap, QPainter, QRegion, QCursor, QIcon, QT
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QProgressBar, QMenu, QMessageBox, QProgressDialog, QPushButton, QSystemTrayIcon, QTextBrowser, QSlider, QDialog, QCheckBox
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from quota import read_quota, quota_windows
-from version import VERSION
+from version import VERSION, BASE_VERSION, BRANCH
 from movement import plan_movement, movement_fraction
 
 from platform_support import resource_root,state_root,configure_mac_window
@@ -142,6 +142,7 @@ class Pet(QWidget):
         self.bubble=Bubble();self.generation=0;self.worker=None;self.quota_inflight=False;self.dragging=False;self.last_click=None
         self.bubble.dismiss_requested.connect(self.dismiss_bubble)
         self.chat=None
+        self.diagnostics=None
         self.task_active=False
         self.manual_hidden=False;self.fullscreen_hidden=False;self.hidden_since=None
         self.settings=QSettings('BailongPet','DesktopPet')
@@ -528,6 +529,8 @@ class Pet(QWidget):
         if self.frames:
             painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             self.draw_frame(painter,QRectF(self.rect()))
+            painter.end()
+            if self.diagnostics:self.diagnostics.record(self.frames[self.index])
     def draw_frame(self,painter,canvas):
         painter.save()
         if self.dock_edge:
@@ -690,8 +693,22 @@ class Pet(QWidget):
         muted=menu.addAction('禁用音效');muted.setCheckable(True)
         muted.setChecked(self.sound_disabled);muted.toggled.connect(self.set_sound_disabled)
         menu.addSeparator()
+        menu.addAction('性能统计…',self.show_diagnostics)
+        menu.addAction('关于…',self.show_about)
         menu.addAction('退出桌宠',self.close)
         return menu
+    def show_diagnostics(self):
+        if self.diagnostics is None:
+            from diagnostics import DiagnosticsWindow
+            self.diagnostics=DiagnosticsWindow(self,ROOT)
+        self.diagnostics.reveal()
+    def show_about(self):
+        QMessageBox.about(self,'关于白龙桌宠',
+            '<h3>GPT白龙娘动态桌宠</h3>'
+            f'<p>分支版本：{VERSION}<br>原作者基线：v{BASE_VERSION}<br>分支：{BRANCH}</p>'
+            '<p>反哺迭代：Qt 性能统计与 macOS 本机构建。<br>'
+            '技术栈：Python · PySide6 / Qt · FFmpeg<br>角色素材：原作者 v0.5.1 素材</p>'
+            '<p><a href="https://github.com/jingh12312-rgb/bailong-desktop-pet">原作者项目</a></p>')
     def set_sound_disabled(self,disabled):
         self.sound_disabled=bool(disabled);self.settings.setValue('soundDisabled',self.sound_disabled)
     def set_task_bubbles_disabled(self,disabled):
@@ -905,6 +922,7 @@ class Pet(QWidget):
         if self.chat and not self.chat.shutdown():
             event.ignore();QTimer.singleShot(500,self.close);return
         self.desktop_sync.stop()
+        if self.diagnostics:self.diagnostics.close()
         self.tick.stop();self.visibility_timer.stop();self.tray.hide();self.bubble.close()
         if self.worker and self.worker.isRunning():self.worker.cancel.set();self.worker.wait(3000)
         QApplication.quit();event.accept()

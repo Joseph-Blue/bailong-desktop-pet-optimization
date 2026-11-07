@@ -1,5 +1,8 @@
 .venv/
 .DS_Store
+dist-macos/
+tools/
+docs/实施记录.md
 __pycache__/
 *.pyc
 app/cache/
