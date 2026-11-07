@@ -2,6 +2,13 @@
 
 原作者基线保持 `0.5.1`。从本轮起，反哺分支使用 `0.5.1-opt.N`，`N` 为递增迭代号；它是 SemVer 预发布版本，不代表原作者发布了新版本。此前 `+optimization.N` 为构建元数据，不参与 SemVer 排序。
 
+## 0.5.1-opt.7 · 2026-11-07
+
+- 新增根目录 Windows PowerShell 7+、macOS Bash、Debian／Ubuntu、Fedora／RHEL、Arch 构建入口；各自使用独立构建虚拟环境，支持显式指定 Python 和 FFmpeg。
+- 共用 PyInstaller 素材整理流程，Windows／Linux 构建目录包含程序、运行库、原作者素材、音效和 FFmpeg；macOS 继续生成本机架构的临时签名应用。构建前检查素材和 libvpx-vp9 解码器，保留已有 Python 构建入口。
+- Linux 入口提供显式系统依赖安装选项，产物附带 X11／XWayland 启动脚本；跨发行版、架构和窗口管理器的行为留待实机验证。
+- 新增 BUILDING.md，更新开发及 macOS 文档；本分支存入独立私人源码仓库，不上传素材、构建产物或创建 Release。
+
 ## 0.5.1-opt.6 · 2026-11-07
 
 - 性能统计新增主进程与 FFmpeg 的运行内存 (RAM) 合计，并保留分项；macOS 两项统一读取物理占用，Windows／Linux 使用 RSS。合计不包含 Codex 进程，也不重复加入帧缓存；分项读取失败时不显示不完整合计。

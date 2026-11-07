@@ -1,6 +1,8 @@
 .venv/
+.venv-build*/
 .DS_Store
 dist-macos/
+dist-linux/
 tools/
 docs/实施记录.md
 __pycache__/

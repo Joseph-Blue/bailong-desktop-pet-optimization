@@ -1,6 +1,9 @@
-from pathlib import Path
-import sys,subprocess,shutil,json
-root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'.build-tools'));sys.path.insert(0,str(root/'app'))
-from version import VERSION
-import PyInstaller.__main__
-PyInstaller.__main__.run(['--noconfirm','--clean','--onedir','--windowed','--name','BailongPet','--distpath',str(root/'发布包'/f'build-v{VERSION}'),'--workpath',str(root/'.build'/f'work-v{VERSION}'),'--specpath',str(root/'.build'),'--exclude-module','numpy','--exclude-module','scipy','--exclude-module','matplotlib','--exclude-module','tkinter','--exclude-module','PyQt5','--exclude-module','PyQt6','--hidden-import','autostart','--hidden-import','selftest','--hidden-import','version',str(root/'app/pet.py')])
+"""Build a complete Windows onedir folder, including assets and FFmpeg."""
+import argparse
+from build_common import build_desktop
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--ffmpeg', help='本机 FFmpeg 可执行文件路径')
+    args = parser.parse_args()
+    build_desktop('windows', ffmpeg_arg=args.ffmpeg)
