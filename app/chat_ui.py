@@ -6,7 +6,8 @@ import queue
 import threading
 import sys
 
-from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer
+from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QPlainTextEdit, QTextBrowser, QListWidget, QSplitter, QFileDialog, QMessageBox,
     QInputDialog, QDialog, QDialogButtonBox)
@@ -99,6 +100,8 @@ class ChatWindow(QWidget):
         self.folder_button = QPushButton('选择任务文件夹'); self.folder_button.clicked.connect(self.folder)
         self.status = QLabel('主人的叮嘱，我都记在这台电脑里啦')
         toolbar.addWidget(new);toolbar.addWidget(self.folder_button);toolbar.addWidget(self.status, 1)
+        self.codex_button = QPushButton('转到 Codex');self.codex_button.hide()
+        toolbar.addWidget(self.codex_button)
         layout.addLayout(toolbar)
         split = QSplitter()
         self.list = QListWidget(); self.list.setMaximumWidth(250)
@@ -177,17 +180,30 @@ class ChatController(QObject):
         self.latest_preview_kind='output'
         self.window.selected.connect(self.select)
         self.window.new_chat.connect(self.new_chat)
+        self.window.codex_button.clicked.connect(self.open_codex)
         for source in (self.composer,self.window):
             source.stop.connect(self.stop);source.folder.connect(self.choose_folder)
-        if self.store.conversations:self.active=self.store.conversations[-1]
+        self.active=self.latest_local_chat()
         self.refresh_list()
 
     @property
     def busy(self):return self.running_turn is not None
 
+    def latest_local_chat(self):
+        return next((c for c in reversed(self.store.conversations) if not c.get('desktopSync')),None)
+
+    def open_codex(self):
+        if self.active and self.active.get('desktopSync'):
+            thread=self.active.get('threadId')
+            url=QUrl('codex://threads/'+bytes(QUrl.toPercentEncoding(str(thread))).decode() if thread else 'codex://')
+            if not QDesktopServices.openUrl(url):
+                self.pet.say('无法打开 Codex，请手动打开并选择该会话。',10000)
+
     def toggle(self):
         if self.enabled:self.hide()
         else:
+            if not self.busy and self.active and self.active.get('desktopSync'):
+                self.active=self.latest_local_chat();self.refresh_list()
             self.enabled=True;self.composer.show();self.pet.ensure_on_screen();self.position()
             self.composer.activateWindow();self.composer.editor.setFocus()
             self.pet.sync_dialogue_visibility()
@@ -214,6 +230,7 @@ class ChatController(QObject):
         for chat in reversed(self.store.conversations):
             item=QListWidgetItem(chat['title']);item.setData(Qt.ItemDataRole.UserRole,chat['id']);self.window.list.addItem(item)
             if self.active and chat['id']==self.active['id']:self.window.list.setCurrentItem(item)
+        if self.active is None:self.window.list.setCurrentRow(-1)
         self.window.list.blockSignals(False);self.render()
 
     def select(self, chat_id):
@@ -222,7 +239,7 @@ class ChatController(QObject):
     def new_chat(self):
         if self.busy:
             self.pet.say('主人，手头这件事还没忙完呢，完成或停止后，我们再开一段新对话好不好？');return
-        self.active=self.store.new(self.active['cwd'] if self.active else self.default_cwd)
+        self.active=self.store.new(self.active['cwd'] if self.active and not self.active.get('desktopSync') else self.default_cwd)
         self.refresh_list();self.window.editor.clear();self.composer.editor.clear()
         self.composer.status.setText('主人，新对话准备好啦。')
 
@@ -236,6 +253,9 @@ class ChatController(QObject):
 
     def submit(self, prompt):
         if self.busy or self.closing:return
+        if self.active and self.active.get('desktopSync'):
+            self.pet.say('这是 Codex 的只读同步记录。请在历史窗口点击“转到 Codex”继续，或点击“新对话”与桌宠聊天。',10000)
+            return
         from quota import find_codex
         try:
             find_codex()
@@ -369,6 +389,15 @@ class ChatController(QObject):
 
     def render(self):
         chat=self.active
+        external=bool(chat and chat.get('desktopSync'))
+        self.window.codex_button.setVisible(external)
+        for source in (self.composer,self.window):
+            source.editor.setReadOnly(external)
+        self.window.send_button.setEnabled(not self.busy and not external)
+        self.composer.send_button.setEnabled(self.busy or not external)
+        if not self.busy:
+            self.composer.status.setText('Codex 同步记录只读；请开启新对话。' if external else '主人，今天想让我帮什么忙呀？')
+            self.window.status.setText('Codex 同步记录只读；请转到 Codex 继续。' if external else '主人的叮嘱，我都记在这台电脑里啦')
         if not chat:
             self.window.view.setPlainText('主人，我在这里等你呀。把想做的事写在下方，我们就可以开始啦。')
             self.window.path_label.setText('我会把任务文件放在这里：'+str(self.default_cwd));return

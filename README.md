@@ -1,6 +1,6 @@
 # GPT白龙娘动态桌宠 v0.5.1
 
-当前反哺分支：`joseph/optimization`，版本 `0.5.1-opt.5`，保留作者 `0.5.1` 基线。变更见 [CHANGELOG](CHANGELOG.md)。按 Windows／macOS／Linux 共用 Qt 实现维护，当前仅构建 Apple Silicon 本机测试包。
+当前反哺分支：`joseph/optimization`，版本 `0.5.1-opt.6`，保留作者 `0.5.1` 基线。变更见 [CHANGELOG](CHANGELOG.md)。按 Windows／macOS／Linux 共用 Qt 实现维护，当前仅构建 Apple Silicon 本机测试包。
 
 两套构建入口均随本分支维护：[macOS 应用构建](work/build_macos.py)、[Windows 应用构建](work/build_windows.py)。分别在对应系统运行；Windows 完整包整理入口为 [build_release.py](work/build_release.py)。
 

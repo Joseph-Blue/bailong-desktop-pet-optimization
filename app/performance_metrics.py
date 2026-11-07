@@ -48,6 +48,15 @@ class TaskVMInfo(C.Structure):
          ('decompressions', C.c_int32), ('ledger_swapins', C.c_int64)]
 
 
+class RUsageInfoV0(C.Structure):
+    # Public sys/resource.h RUSAGE_INFO_V0, supported since macOS 10.9.
+    _fields_ = [('uuid', C.c_uint8 * 16)] + [
+        (name, C.c_uint64) for name in (
+            'user_time', 'system_time', 'pkg_idle_wkups', 'interrupt_wkups',
+            'pageins', 'wired_size', 'resident_size', 'phys_footprint',
+            'proc_start_abstime', 'proc_exit_abstime')]
+
+
 class MacCounters:
     def __init__(self):
         self.lib = C.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)
@@ -58,6 +67,8 @@ class MacCounters:
         self.lib.proc_pidinfo.argtypes = [C.c_int, C.c_int, C.c_uint64,
                                          C.c_void_p, C.c_int]
         self.lib.proc_pidinfo.restype = C.c_int
+        self.lib.proc_pid_rusage.argtypes = [C.c_int, C.c_int, C.c_void_p]
+        self.lib.proc_pid_rusage.restype = C.c_int
         self.gpu_usage = getattr(self.lib, 'coalition_info_resource_usage', None)
         if self.gpu_usage is not None:
             self.gpu_usage.argtypes = [C.c_uint64, C.c_void_p, C.c_size_t]
@@ -76,6 +87,13 @@ class MacCounters:
             if info.ledger_swapins >= 0:
                 swapins = info.ledger_swapins
         return info.phys_footprint, info.compressed, swapins
+
+    def process_footprint(self, pid):
+        info = RUsageInfoV0()
+        if self.lib.proc_pid_rusage(pid, 0, C.byref(info)):
+            code = C.get_errno()
+            raise OSError(code, os.strerror(code))
+        return info.phys_footprint
 
     def gpu(self):
         # Same application-coalition scope as the Swift window. Never report

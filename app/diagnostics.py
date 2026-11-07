@@ -225,9 +225,13 @@ class DiagnosticsWindow(QWidget):
                                               else '当前平台未接入进程换入计数')
         if swap_rate is not None:
             swapins += f' · {byte_text(swap_rate)}/s'
+        decoder_text, decoder_ram = self.decoder_text(buffered['pid'])
+        total_ram = (process.ram + decoder_ram
+                     if process.ram is not None and decoder_ram is not None else None)
         self.resources.setText(
+            f'运行内存 (RAM) 合计 · {ram_scope} {byte_text(total_ram)}（主进程 + FFmpeg）\n'
             f'主进程 {cpu_text}\n主进程运行内存 (RAM) · {ram_scope} {ram}\n'
-            f'{self.decoder_text(buffered["pid"])}\n'
+            f'{decoder_text}\n'
             f'GPU（应用组）{gpu_text}\n'
             f'本进程压缩 {byte_text(process.compressed)} · 系统 Swap {swap}\n'
             f'本进程 Swap-in：{swapins}\n'
@@ -245,24 +249,27 @@ class DiagnosticsWindow(QWidget):
     def decoder_text(self,pid):
         if pid is None:
             self.decoder_previous=None
-            return 'FFmpeg：未运行'
+            return 'FFmpeg：未运行', 0
         try:
             decoder=psutil.Process(pid)
             with decoder.oneshot():
-                times=decoder.cpu_times();ram=decoder.memory_info().rss
+                times=decoder.cpu_times()
+                ram=(self.statistics.mac.process_footprint(pid) if self.statistics.mac
+                     else decoder.memory_info().rss)
             now=time.monotonic();seconds=times.user+times.system
             cpu='等待采样'
             if self.decoder_previous and self.decoder_previous[0]==pid:
                 _,before,previous=self.decoder_previous
                 cpu=f'{(seconds-previous)/(now-before)*100:.1f}%'
             self.decoder_previous=(pid,now,seconds)
-            return f'FFmpeg · PID {pid} · CPU 单核基准 {cpu}\n解码进程运行内存 (RAM) · RSS {byte_text(ram)}'
+            scope='物理占用' if self.statistics.mac else '驻留集 RSS'
+            return f'FFmpeg · PID {pid} · CPU 单核基准 {cpu}\n解码进程运行内存 (RAM) · {scope} {byte_text(ram)}', ram
         except psutil.NoSuchProcess:
             self.decoder_previous=None
-            return 'FFmpeg：本次解码进程已结束'
-        except psutil.AccessDenied as error:
+            return 'FFmpeg：本次解码进程已结束', None
+        except (psutil.AccessDenied, OSError) as error:
             self.decoder_previous=None
-            return f'FFmpeg 统计读取失败：{error}'
+            return f'FFmpeg 统计读取失败：{error}', None
 
     def copy_information(self):
         values = ' · '.join(f'{title} {label.text()}' for title, label in

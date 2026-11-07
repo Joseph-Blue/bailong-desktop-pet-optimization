@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from chat_backend import HistoryStore, CodexSession, TaskCancelled
 
@@ -65,12 +65,70 @@ class BackendTests(unittest.TestCase):
 
 
 from PySide6.QtWidgets import QApplication,QLabel,QPushButton
-from PySide6.QtCore import QPoint,Qt
+from PySide6.QtCore import QObject,QPoint,Qt
 from PySide6.QtTest import QTest
 from pet import Pet
 from chat_ui import ChatController,TaskWorker
 
 app=QApplication.instance() or QApplication([])
+
+
+class ReadOnlySyncTests(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory()
+        store=HistoryStore(self.temp.name)
+        self.local=store.new(self.temp.name)
+        self.external=store.new(self.temp.name)
+        self.external.update(desktopSync=True,threadId='external-thread')
+        store.save()
+        self.pet=QObject();self.pet.say=Mock()
+        self.controller=ChatController(self.pet,self.temp.name)
+
+    def tearDown(self):
+        self.controller.shutdown()
+        self.controller.composer.deleteLater();self.controller.window.deleteLater()
+        self.temp.cleanup()
+
+    def test_startup_selects_local_even_when_latest_is_external(self):
+        self.assertEqual(self.controller.active['id'],self.local['id'])
+        self.controller.store.conversations=[self.external]
+        self.assertIsNone(self.controller.latest_local_chat())
+
+    def test_external_submission_preserves_history_and_draft(self):
+        c=self.controller
+        c.composer.editor.setPlainText('保留草稿')
+        c.window.editor.setPlainText('历史草稿')
+        c.select(self.external['id'])
+        before=c.store.path.read_bytes()
+        with patch('chat_ui.TaskWorker') as worker,patch('quota.find_codex') as find:
+            c.submit('不要发给外部会话')
+            worker.assert_not_called();find.assert_not_called()
+        self.assertEqual(c.store.path.read_bytes(),before)
+        self.assertEqual(c.composer.editor.toPlainText(),'保留草稿')
+        self.assertEqual(c.window.editor.toPlainText(),'历史草稿')
+        self.assertTrue(c.window.editor.isReadOnly())
+        self.assertFalse(c.window.send_button.isEnabled())
+        self.assertFalse(c.composer.send_button.isEnabled())
+        with patch('chat_ui.QDesktopServices.openUrl',return_value=True) as open_url:
+            c.window.codex_button.click()
+            self.assertEqual(open_url.call_args.args[0].toString(),'codex://threads/external-thread')
+        c.select(self.local['id'])
+        self.assertFalse(c.window.editor.isReadOnly())
+        self.assertTrue(c.window.send_button.isEnabled())
+
+    def test_new_chat_from_sync_uses_pet_workspace_and_new_identity(self):
+        c=self.controller;c.select(self.external['id']);c.new_chat()
+        self.assertFalse(c.active.get('desktopSync'))
+        self.assertIsNone(c.active['threadId'])
+        self.assertEqual(c.active['cwd'],str(c.default_cwd.resolve()))
+
+    def test_composer_returns_to_local_chat_after_viewing_sync(self):
+        c=self.controller;c.select(self.external['id'])
+        self.pet.ensure_on_screen=Mock();self.pet.sync_dialogue_visibility=Mock()
+        with patch.object(c,'position'):
+            c.toggle()
+        self.assertEqual(c.active['id'],self.local['id'])
+        self.assertFalse(c.composer.editor.isReadOnly())
 
 
 class ChatUiTests(unittest.TestCase):
