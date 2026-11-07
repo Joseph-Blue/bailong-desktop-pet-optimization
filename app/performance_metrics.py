@@ -153,14 +153,15 @@ def byte_text(value):
 
 def frame_cache_statistics(pet):
     # Count shared QPixmap storage only once; do not copy pixels into QImage.
-    clips = {id(frames): frames for frames in
-             [*pet.pinned_frames.values(), *pet.cache.values(), pet.frames] if frames}
     seen = set()
     size = 0
-    for frames in clips.values():
-        for frame in frames:
-            key = frame.cacheKey()
-            if key not in seen:
-                seen.add(key)
-                size += frame.width() * frame.height() * frame.depth() // 8
-    return size, len(clips), len(seen)
+    for frame in pet.frames + ([pet.reference_frame] if pet.reference_frame else []):
+        key = frame.cacheKey()
+        if key not in seen:
+            seen.add(key)
+            size += frame.width() * frame.height() * frame.depth() // 8
+    buffered=pet.stream.statistics()
+    clips={pet.current['id']} if pet.current else set()
+    if pet.display_item:clips.add(pet.display_item['id'])
+    if pet.reference_frame:clips.add(pet.idles[0]['id'])
+    return size+buffered['bytes'],len(clips),len(seen)+buffered['buffered']

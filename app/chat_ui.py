@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import queue
 import threading
+import sys
 
 from PySide6.QtCore import Qt, QThread, Signal, QObject, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -14,6 +15,8 @@ from chat_backend import HistoryStore, CodexSession, TaskCancelled
 from platform_support import configure_mac_window
 
 FLAGS = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool
+# Qt's portable Ctrl modifier maps to Command on macOS; only its label differs.
+SEND_HINT = ('Command' if sys.platform=='darwin' else 'Ctrl')+'+Enter 发送'
 STYLE = '''QWidget {font-family:"Microsoft YaHei","Segoe UI";font-size:12px;color:#38294d;background:#fcfaff;}
 QPushButton {background:#eee6f7;border:1px solid #d6c5e7;border-radius:8px;padding:6px 10px;}
 QPushButton:hover {background:#e3d3f1;} QPushButton:disabled {color:#92869d;}
@@ -45,7 +48,7 @@ class Composer(QWidget):
         close = QPushButton('×'); close.setFixedWidth(22); close.clicked.connect(self.close)
         head.addWidget(close); layout.addLayout(head)
         self.editor = QPlainTextEdit()
-        self.editor.setPlaceholderText('主人，把想做的事告诉我吧…\nCtrl+Enter 发送，Enter 换行')
+        self.editor.setPlaceholderText('主人，把想做的事告诉我吧…\n'+SEND_HINT+'，Enter 换行')
         layout.addWidget(self.editor, 1)
         row = QHBoxLayout()
         row.setSpacing(3)
@@ -103,7 +106,7 @@ class ChatWindow(QWidget):
         self.view = QTextBrowser(); self.view.setOpenExternalLinks(False);self.view.setOpenLinks(False)
         split.addWidget(self.list);split.addWidget(self.view);split.setSizes([210, 700]);layout.addWidget(split, 1)
         self.editor = QPlainTextEdit();self.editor.setMaximumHeight(90)
-        self.editor.setPlaceholderText('主人，我们接着聊吧… Ctrl+Enter 发送')
+        self.editor.setPlaceholderText('主人，我们接着聊吧… '+SEND_HINT)
         layout.addWidget(self.editor)
         row = QHBoxLayout();self.path_label = QLabel();self.path_label.setWordWrap(True);row.addWidget(self.path_label, 1)
         self.stop_button = QPushButton('停止任务');self.stop_button.clicked.connect(self.stop);self.stop_button.hide()

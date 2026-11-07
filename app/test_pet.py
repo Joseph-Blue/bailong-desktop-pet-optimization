@@ -10,14 +10,22 @@ from quota import quota_windows
 
 app=QApplication.instance() or QApplication([])
 class Tests(unittest.TestCase):
-    def setUp(self):self.pet=Pet();self.pet.show()
+    def setUp(self):self.pet=Pet();self.pet.show();self.ready()
+    def ready(self):
+        deadline=time.monotonic()+5
+        while self.pet.loading:
+            self.assertLess(time.monotonic(),deadline)
+            self.pet.animate();QTest.qWait(5)
     def tearDown(self):
         self.pet.tick.stop();self.pet.bubble.close();self.pet.hide()
-        self.pet.frames=[];self.pet.cache.clear();self.pet.pinned_frames.clear();self.pet.transition=None
+        self.pet.stream.close();self.pet.frames=[];self.pet.transition=None
         self.pet.deleteLater();app.processEvents()
     def test_all_assets_and_idle_weights(self):
         self.assertEqual(len(self.pet.variants),15)
-        for item in self.pet.idles+self.pet.variants:self.assertEqual(len(self.pet.load(item)),({'17':121,'21':97,'24':145,'26':97}.get(item['id'],96)))
+        for item in self.pet.idles+self.pet.variants:
+            self.pet.play(item,'variant');self.ready()
+            self.assertEqual(self.pet.frames[0].width(),self.pet.frame_size)
+            self.assertLessEqual(self.pet.stream.statistics()['buffered'],self.pet.buffer_capacity)
         with patch('pet.random.choices',return_value=[self.pet.idles[1]]) as choice:
             self.pet.idle();self.assertEqual(choice.call_args.kwargs['weights'],[4,1])
     def test_click_disambiguation(self):
@@ -31,7 +39,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(self.pet.mode,'variant');self.assertTrue(self.pet.bubble.isVisible())
         self.assertLessEqual(self.pet.bubble_timer.remainingTime(),4000)
     def test_variant_return_and_quota_stale(self):
-        self.pet.choose(self.pet.variants[0]);self.pet.started=time.monotonic()-4.01;self.pet.animate()
+        self.pet.choose(self.pet.variants[0]);self.ready();self.pet.started=time.monotonic()-4.01;self.pet.animate()
         self.assertEqual(self.pet.mode,'idle')
         self.pet.quota_generation=1;self.pet.generation=2
         self.pet.quota_failed('obsolete');self.assertNotIn('obsolete',self.pet.bubble.findChildren(__import__('PySide6.QtWidgets',fromlist=['QLabel']).QLabel)[0].text())
@@ -42,6 +50,7 @@ class Tests(unittest.TestCase):
     def test_loading_then_progress_and_resume(self):
         with patch('pet.QuotaWorker') as worker:
             self.pet.quota()
+            self.ready()
             self.assertEqual(self.pet.mode,'quota')
             self.assertEqual(self.pet.current['id'],self.pet.manifest.get('quotaAnimation',self.pet.idles[0])['id'])
             from PySide6.QtWidgets import QLabel,QProgressBar
@@ -59,7 +68,7 @@ class Tests(unittest.TestCase):
             actions.extend(a.text() for a in menu.actions() if not a.isSeparator());menu.close()
         QTimer.singleShot(100,inspect)
         QTest.mouseClick(self.pet,Qt.MouseButton.RightButton,pos=QPoint(160,160))
-        self.assertEqual(actions,['隐藏桌宠','全屏时自动隐藏','打开对话模式','查看历史对话','对话框大小…','互动差分动画','工作差分动画','待机差分动画','移动差分','禁用自移动','桌宠大小…','禁用音效','退出桌宠'])
+        self.assertEqual(actions,['隐藏桌宠','全屏时自动隐藏','打开对话模式','查看历史对话','对话框大小…','互动差分动画','工作差分动画','待机差分动画','移动差分','禁用自移动','桌宠大小…','禁用音效','性能设置…','性能统计…','关于…','退出桌宠'])
         self.assertEqual(actions[-1],'退出桌宠')
     def test_drag_landing_and_click_suppression(self):
         from types import SimpleNamespace
@@ -68,25 +77,25 @@ class Tests(unittest.TestCase):
         move=SimpleNamespace(buttons=lambda:Qt.MouseButton.LeftButton,globalPosition=lambda:QPointF(240,230))
         self.pet.mousePressEvent(press);self.pet.mouseMoveEvent(move)
         self.assertEqual(self.pet.mode,'drag');self.assertEqual(self.pet.current['id'],'drag')
+        self.ready()
         self.pet.started=time.monotonic()-4.1;self.pet.animate();self.assertEqual(self.pet.mode,'drag')
         self.pet.mouseReleaseEvent(press)
-        self.assertEqual(self.pet.mode,'landing');self.assertEqual(len(self.pet.frames),48)
+        self.assertEqual(self.pet.mode,'landing');self.ready();self.assertEqual(self.pet.stream.statistics()['count'],48)
         self.assertEqual(self.pet.current['durationMs'],2000);self.assertFalse(self.pet.click_timer.isActive())
         self.pet.started=time.monotonic()-2.1;self.pet.animate();self.assertEqual(self.pet.mode,'idle')
-    def test_interaction_frames_survive_variant_eviction(self):
-        for item in self.pet.variants[:3]:self.pet.load(item)
-        with patch('pet.gzip.decompress',side_effect=AssertionError('drag must not decode on mouse movement')):
-            drag=self.pet.manifest['dragAnimation'];landing=self.pet.manifest['landingAnimation']
-            self.assertIs(self.pet.load(drag),self.pet.pinned_frames[str(self.pet.asset_path(drag))])
-            self.assertEqual(len(self.pet.load(landing)),48)
-    def test_variant_cache_bounded_and_idle_return_is_warm(self):
+    def test_reference_frame_survives_action_switches(self):
+        reference=self.pet.reference_frame.cacheKey()
+        for item in self.pet.variants[:3]:self.pet.play(item,'variant');self.ready()
+        self.assertEqual(self.pet.reference_frame.cacheKey(),reference)
+        self.assertEqual(len(self.pet.frames),1)
+    def test_variant_buffer_bounded_and_idle_return(self):
         for item in self.pet.variants:
             self.pet.choose(item)
-            self.assertLessEqual(len(self.pet.cache),2)
+            self.ready()
+            self.assertLessEqual(self.pet.stream.statistics()['buffered'],self.pet.buffer_capacity)
             self.pet.started=time.monotonic()-item['durationMs']/1000-.1
-            with patch('pet.gzip.decompress',side_effect=AssertionError('idle should stay warm')):
-                self.pet.animate()
-                self.assertEqual(self.pet.mode,'idle')
+            self.pet.animate()
+            self.assertIn(self.pet.mode,('idle','return-idle'))
     def test_quota_zero_percent_is_readable_outside_bar(self):
         from PySide6.QtWidgets import QLabel,QProgressBar
         self.pet.bubble.quota([{'name':'5小时','remaining':0,'resetsAt':None}])

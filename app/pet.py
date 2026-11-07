@@ -1,15 +1,14 @@
-import json, random, sys, time, threading, gzip, os
+import json, random, sys, time, threading, os
 from pathlib import Path
-from collections import OrderedDict
 from datetime import datetime
-from PIL import Image
 from PySide6.QtCore import Qt, QTimer, QThread, Signal, QPoint, QPointF, QRect, QRectF, QSize, QSettings, QEvent
 from PySide6.QtGui import QImage, QPixmap, QPainter, QRegion, QCursor, QIcon, QTransform
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QProgressBar, QMenu, QMessageBox, QProgressDialog, QPushButton, QSystemTrayIcon, QTextBrowser, QSlider, QDialog, QCheckBox
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QProgressBar, QMenu, QMessageBox, QPushButton, QSystemTrayIcon, QTextBrowser, QSlider, QDialog, QCheckBox
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from quota import read_quota, quota_windows
 from version import VERSION, BASE_VERSION, BRANCH
 from movement import plan_movement, movement_fraction
+from frame_buffer import FrameBuffer
 
 from platform_support import resource_root,state_root,configure_mac_window
 ROOT=resource_root()
@@ -136,7 +135,10 @@ class Pet(QWidget):
         self.idles=[self.manifest['idle']]+self.manifest.get('additionalIdleAnimations',[])[:1]
         self.extra_idles=[v for v in self.manifest.get('additionalIdleAnimations',[]) if v.get('id') in ('idle03','idle04','idle05','idle06') and self.asset_path(v).is_file()]
         self.next_leisure_group='idle';self.next_leisure_at=time.monotonic()+15.0
-        self.cache=OrderedDict();self.pinned_frames={};self.frames=[];self.current=None;self.mode='idle';self.index=0
+        self.frames=[];self.current=None;self.mode='idle';self.index=0
+        self.source_index=0;self.display_item=None;self.reference_frame=None;self.loading=False
+        self.stream=FrameBuffer()
+        QApplication.instance().aboutToQuit.connect(self.stream.close)
         self.frame_size=min(512,max(256,round(256*max(s.devicePixelRatio() for s in QApplication.screens()))))
         self.transition=None
         self.bubble=Bubble();self.generation=0;self.worker=None;self.quota_inflight=False;self.dragging=False;self.last_click=None
@@ -146,6 +148,11 @@ class Pet(QWidget):
         self.task_active=False
         self.manual_hidden=False;self.fullscreen_hidden=False;self.hidden_since=None
         self.settings=QSettings('BailongPet','DesktopPet')
+        self.resolution=self.settings.value('animationResolution',0,type=int)
+        if self.resolution not in (0,720,512,384,256):self.resolution=0
+        if self.resolution:self.frame_size=self.resolution
+        self.buffer_capacity=self.settings.value('animationBufferFrames',24,type=int)
+        if not 6<=self.buffer_capacity<=240:self.buffer_capacity=24
         self.bubble_percent=max(50,min(150,self.settings.value('bubblePercent',100,type=int)))
         self.task_bubbles_disabled=self.settings.value('taskBubblesDisabled',False,type=bool)
         self.sound_disabled=self.settings.value('soundDisabled',False,type=bool)
@@ -171,19 +178,7 @@ class Pet(QWidget):
         for screen in QApplication.screens():self.watch_screen(screen)
         QApplication.instance().screenAdded.connect(self.watch_screen)
         QApplication.instance().screenRemoved.connect(lambda screen:QTimer.singleShot(0,self.ensure_on_screen))
-        self.idle()
-        # User prefers immediate interaction: decode all actions once at startup
-        # and retain them even while hidden, without running the animation timer.
-        items=self.idles+self.extra_idles+self.variants+self.movement_slots+[v for v in self.work_slots if v and self.asset_path(v).is_file()]+[self.manifest[name] for name in ('dragAnimation','landingAnimation','quotaAnimation') if self.manifest.get(name)]
-        items += [self.return_transition_item(v) for v in self.variants if v.get('returnTransition')]
-        progress=None
-        if QApplication.platformName()!='offscreen':
-            progress=QProgressDialog('主人，等我整理好裙摆和小翅膀，马上就来…','',0,len(items))
-            progress.setCancelButton(None);progress.setWindowTitle('白龙桌宠');progress.setMinimumDuration(0);progress.show()
-        for i,item in enumerate(items):
-            key=str(self.asset_path(item));self.pinned_frames[key]=self.load(item);self.cache.pop(key,None)
-            if progress:progress.setValue(i+1);QApplication.processEvents()
-        if progress:progress.close()
+        self.play(self.idles[0],'idle')
         self.transition=None
         self.started=time.monotonic();self.tick.start()
         self.last_interaction=self.started
@@ -201,13 +196,13 @@ class Pet(QWidget):
         if QApplication.platformName()!='offscreen':QTimer.singleShot(1500,self.desktop_sync.start)
     def setup_tray(self):
         # Use the default idle's first frame, independent of the current action.
-        icon=QIcon(self.pinned_frames[str(self.asset_path(self.idles[0]))][0])
+        icon=QIcon(self.reference_frame) if self.reference_frame else QIcon()
         self.setWindowIcon(icon)
         self.tray=QSystemTrayIcon(icon,self);self.tray.setToolTip('GPT白龙娘桌宠')
         self.tray_menu=self.context_menu();self.tray.setContextMenu(self.tray_menu)
         self.tray_menu.aboutToShow.connect(self.refresh_tray_menu)
         self.tray.activated.connect(self.tray_activated)
-        if QSystemTrayIcon.isSystemTrayAvailable():self.tray.show()
+        if self.reference_frame and QSystemTrayIcon.isSystemTrayAvailable():self.tray.show()
     def refresh_tray_menu(self):
         self.note_interaction(cancel_movement=False)
         # Rebuild through the same factory used by the pet's right-click menu.
@@ -317,6 +312,7 @@ class Pet(QWidget):
             self.say('主人，托盘暂时没准备好，我先留在这里陪你。');return
         self.manual_hidden=hidden;self.apply_visibility()
     def apply_visibility(self):
+        self.stream.pause(self.desktop_hidden())
         if self.desktop_hidden():
             if self.hidden_since is None:self.hidden_since=time.monotonic()
             self.dock_click_timer.stop()
@@ -404,43 +400,13 @@ class Pet(QWidget):
     def asset_path(self,item):
         # Optional playbackFile allows future formats without changing the manifest's video source.
         return ASSETS/(item.get('playbackFile') or item['file'].replace('.webm','.webp'))
-    def load(self,item):
-        path=self.asset_path(item);key=str(path)
-        if key in self.pinned_frames:return self.pinned_frames[key]
-        if key in self.cache: self.cache.move_to_end(key);return self.cache[key]
-        frames=[]
-        packed=ROOT/'app/cache'/f'{item["id"]}-hq.rgba.gz';metadata=packed.with_suffix('.json')
-        if packed.is_file() and metadata.is_file():
-            meta=json.loads(metadata.read_text(encoding='utf-8'));stat=path.stat()
-            if meta['sourceSize']==stat.st_size and meta['sourceMtime']==stat.st_mtime_ns:
-                raw=gzip.decompress(packed.read_bytes());stride=512*512*4
-                if len(raw)==meta['frames']*stride:
-                    for offset in range(0,len(raw),stride):
-                        pixmap=QPixmap.fromImage(QImage(raw[offset:offset+stride],512,512,2048,QImage.Format.Format_RGBA8888).copy())
-                        frames.append(pixmap.scaled(self.frame_size,self.frame_size,Qt.AspectRatioMode.IgnoreAspectRatio,Qt.TransformationMode.SmoothTransformation) if self.frame_size!=512 else pixmap)
-        if frames:
-            self.cache[key]=frames
-            while len(self.cache)>2:self.cache.popitem(last=False)
-            return frames
-        if path.suffix.lower()=='.webm':
-            from video_frames import rgba_frames
-            for raw in rgba_frames(path,self.frame_size):
-                qimage=QImage(raw,self.frame_size,self.frame_size,self.frame_size*4,QImage.Format.Format_RGBA8888).copy()
-                frames.append(QPixmap.fromImage(qimage))
-        else:
-            with Image.open(path) as source:
-                for i in range(source.n_frames):
-                    source.seek(i);im=source.convert('RGBA').resize((self.frame_size,self.frame_size),Image.Resampling.LANCZOS)
-                    raw=im.tobytes();qimage=QImage(raw,self.frame_size,self.frame_size,self.frame_size*4,QImage.Format.Format_RGBA8888).copy()
-                    frames.append(QPixmap.fromImage(qimage))
-        if not frames: raise RuntimeError('动画没有可播放帧：'+str(path))
-        self.cache[key]=frames
-        while len(self.cache)>2:self.cache.popitem(last=False)
-        return frames
     def play(self,item,mode):
         if self.dock_edge and mode!='idle':return
         if self.movement_plan is not None:self.finish_movement()
-        self.frames=self.load(item);self.current=item;self.mode=mode;self.index=0;self.started=time.monotonic();self.update_frame()
+        self.current=item;self.mode=mode;self.source_index=0;self.loading=True
+        self.stream.play(self.asset_path(item),self.frame_size,item['durationMs']/1000,self.buffer_capacity)
+        self.started=time.monotonic()
+        if not self.desktop_hidden():self.tick.start()
         if getattr(self,'hidden_since',None) is not None:self.hidden_since=self.started
         self.transition=None
         self.sync_dialogue_visibility()
@@ -501,9 +467,29 @@ class Pet(QWidget):
         # dither the soft character edges and damage transparent rendering.
         self.update()
     def animate(self):
+        # Edge motion remains responsive while a new clip's first frame loads.
         if getattr(self,'dock_exit',None) and time.monotonic()-self.dock_exit[0]>=.3:
             self.undock();self.idle()
         if self.dock_edge:self.update()
+        elapsed=0 if self.loading else time.monotonic()-self.started
+        try:frame=self.stream.take(elapsed)
+        except RuntimeError as error:
+            self.tick.stop()
+            if self.reference_frame:self.say('动画加载失败：'+str(error),0)
+            else:QMessageBox.critical(self,'动画加载失败',str(error))
+            return
+        if frame is not None:
+            source_index,_,raw=frame
+            image=QImage(raw,self.frame_size,self.frame_size,self.frame_size*4,QImage.Format.Format_RGBA8888)
+            self.frames=[QPixmap.fromImage(image)];self.index=0;self.source_index=source_index
+            self.display_item=self.current
+            if self.reference_frame is None:
+                self.reference_frame=self.frames[0]
+                icon=QIcon(self.reference_frame);self.setWindowIcon(icon);self.tray.setIcon(icon)
+                if QSystemTrayIcon.isSystemTrayAvailable():self.tray.show()
+            if self.loading:self.loading=False;self.started=time.monotonic()
+            self.update_frame()
+        if self.loading:return
         duration=self.current.get('durationMs',4000)/1000
         elapsed=time.monotonic()-self.started
         # Automatic actions are selected by idle() only at clip boundaries.
@@ -522,9 +508,7 @@ class Pet(QWidget):
             elif self.mode=='return-idle':self.play(self.idles[0],'idle')
             else:self.idle()
             return
-        index=min(len(self.frames)-1,int(elapsed/duration*len(self.frames)))
         if self.transition:self.update()
-        if index!=self.index:self.index=index;self.update_frame()
     def paintEvent(self,event):
         if self.frames:
             painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
@@ -547,7 +531,7 @@ class Pet(QWidget):
             rotation=QTransform();rotation.translate(pivot.x(),pivot.y());rotation.rotate(angle*t);rotation.translate(-pivot.x(),-pivot.y())
             # Match the reference's 55% exposure of the rotated visible bounds,
             # rather than anchoring a guessed head crop to a square viewport.
-            stable=self.pinned_frames[str(self.asset_path(self.idles[0]))][0]
+            stable=self.reference_frame
             if not hasattr(self,'dock_visible_bounds'):self.dock_visible_bounds=QRegion(stable.mask()).boundingRect()
             bounds=self.dock_visible_bounds
             local=QRectF(bounds.x()*w/stable.width(),bounds.y()*h/stable.height(),bounds.width()*w/stable.width(),bounds.height()*h/stable.height())
@@ -560,7 +544,8 @@ class Pet(QWidget):
             painter.translate(dx*t,dy*t);painter.setTransform(rotation,True)
         if self.movement_mirrored:
             painter.translate(canvas.x()*2+canvas.width(),0);painter.scale(-1,1)
-        scale=self.current.get('renderScale',1.0);offset=self.current.get('renderOffset',[0,0])
+        item=self.display_item or self.current
+        scale=item.get('renderScale',1.0);offset=item.get('renderOffset',[0,0])
         width,height=canvas.width()*scale,canvas.height()*scale
         target=QRectF(canvas.x()+(canvas.width()-width)/2+canvas.width()*offset[0],canvas.y()+canvas.height()-height+canvas.height()*offset[1],width,height)
         frame=self.frames[self.index];painter.drawPixmap(target,frame,QRectF(frame.rect()))
@@ -693,6 +678,7 @@ class Pet(QWidget):
         muted=menu.addAction('禁用音效');muted.setCheckable(True)
         muted.setChecked(self.sound_disabled);muted.toggled.connect(self.set_sound_disabled)
         menu.addSeparator()
+        menu.addAction('性能设置…',self.show_performance_settings)
         menu.addAction('性能统计…',self.show_diagnostics)
         menu.addAction('关于…',self.show_about)
         menu.addAction('退出桌宠',self.close)
@@ -702,6 +688,19 @@ class Pet(QWidget):
             from diagnostics import DiagnosticsWindow
             self.diagnostics=DiagnosticsWindow(self,ROOT)
         self.diagnostics.reveal()
+    def show_performance_settings(self):
+        from performance_settings import PerformanceSettings
+        if not hasattr(self,'performance_settings'):
+            self.performance_settings=PerformanceSettings(self)
+        self.performance_settings.showNormal();self.performance_settings.raise_();self.performance_settings.activateWindow()
+    def apply_performance(self,resolution,capacity):
+        self.resolution=resolution;self.buffer_capacity=capacity
+        self.settings.setValue('animationResolution',resolution)
+        self.settings.setValue('animationBufferFrames',capacity)
+        self.frame_size=resolution or min(512,max(256,round(256*max(s.devicePixelRatio() for s in QApplication.screens()))))
+        route=self.movement_plan
+        self.play(self.current,self.mode)
+        if route:self.movement_plan=(QPoint(self.pos()),route[1])
     def show_about(self):
         QMessageBox.about(self,'关于白龙桌宠',
             '<h3>GPT白龙娘动态桌宠</h3>'
@@ -922,6 +921,7 @@ class Pet(QWidget):
         if self.chat and not self.chat.shutdown():
             event.ignore();QTimer.singleShot(500,self.close);return
         self.desktop_sync.stop()
+        self.stream.close()
         if self.diagnostics:self.diagnostics.close()
         self.tick.stop();self.visibility_timer.stop();self.tray.hide();self.bubble.close()
         if self.worker and self.worker.isRunning():self.worker.cancel.set();self.worker.wait(3000)
@@ -974,7 +974,7 @@ def main():
                 ctypes.windll.user32.ShowWindow(handle,4)
                 native_visible=bool(ctypes.windll.user32.IsWindowVisible(handle))
             (STATE_ROOT/'app').mkdir(parents=True,exist_ok=True)
-            (STATE_ROOT/'app/运行状态.json').write_text(json.dumps({'version':VERSION,'pid':os.getpid(),'visible':pet.isVisible(),'nativeVisible':native_visible,'windowId':int(pet.winId()),'variants':len(pet.variants),'position':[pet.x(),pet.y()],'displaySize':[pet.width(),pet.height()],'frameSize':[self_size for self_size in (pet.frames[0].width(),pet.frames[0].height())]},ensure_ascii=False),encoding='utf-8')
+            (STATE_ROOT/'app/运行状态.json').write_text(json.dumps({'version':VERSION,'pid':os.getpid(),'visible':pet.isVisible(),'nativeVisible':native_visible,'windowId':int(pet.winId()),'variants':len(pet.variants),'position':[pet.x(),pet.y()],'displaySize':[pet.width(),pet.height()],'frameSize':[pet.frames[0].width(),pet.frames[0].height()] if pet.frames else []},ensure_ascii=False),encoding='utf-8')
         QTimer.singleShot(1000,record_startup)
         def record_visibility():
             (STATE_ROOT/'app/显示诊断.json').write_text(json.dumps({'pid':os.getpid(),'visible':pet.isVisible(),'manualHidden':pet.manual_hidden,'fullscreenHidden':pet.fullscreen_hidden,'trayVisible':pet.tray.isVisible(),'trayAvailable':QSystemTrayIcon.isSystemTrayAvailable(),'syncWatching':pet.desktop_sync.timer.isActive(),'syncActive':len(pet.desktop_sync.running),'syncObserved':len(pet.desktop_sync.known),'platform':QApplication.platformName(),'position':[pet.x(),pet.y()],'windowId':int(pet.winId())},ensure_ascii=False),encoding='utf-8')

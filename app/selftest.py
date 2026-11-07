@@ -34,20 +34,28 @@ def run(root):
         from types import SimpleNamespace
         report.update(version=VERSION,frozen=bool(getattr(sys,'frozen',False)))
         app=QApplication([]);pet=Pet();pet.tick.stop()
+        def ready():
+            deadline=time.monotonic()+10
+            while pet.loading:
+                assert time.monotonic()<deadline,'首帧读取超时'
+                pet.animate();time.sleep(.005)
+            pet.tick.stop()
+        ready()
         # Offline checks must not inherit a user's muted notification preferences.
         # Change instance fields only; do not overwrite their saved settings.
         pet.task_bubbles_disabled=False;pet.sound_disabled=True
         items=[pet.manifest['idle']]+pet.manifest.get('additionalIdleAnimations',[])+pet.variants+[pet.manifest[k] for k in ('dragAnimation','landingAnimation','quotaAnimation')]+[v for v in pet.work_slots if v]+pet.movement_slots
         for item in items:
-            frames=pet.load(item);assert abs(len(frames)-round(item['durationMs']*item.get('fps',30 if item.get('number')=='03' and item.get('movementAngleRange') else 24)/1000))<=1
-            assert frames[0].width()==pet.frame_size
-        assert len(pet.variants)==15 and len(items)==24+len(pet.manifest.get('additionalIdleAnimations',[]))+len(pet.movement_slots);report['checks'].append(f'{len(items)}段动画可解码，含移动差分')
+            pet.play(item,'preview');ready()
+            assert pet.frames[0].width()==pet.frame_size
+            assert pet.stream.statistics()['buffered']<=pet.buffer_capacity
+        assert len(pet.variants)==15 and len(items)==24+len(pet.manifest.get('additionalIdleAnimations',[]))+len(pet.movement_slots);report['checks'].append(f'{len(items)}段动画首帧可解码且缓冲有界，含移动差分')
         assert (root/'app/sounds/click.wav').is_file()
         assert next(v for v in pet.variants if v['id']=='14') in items
         for item in items:
             assert 'renderScale' in item and 'renderOffset' in item
         report['checks'].append('全部动作尺寸校准字段齐全')
-        pet.play(pet.manifest['quotaAnimation'],'quota');pet.started=time.monotonic()-4.1;pet.animate();assert pet.mode=='idle'
+        pet.play(pet.manifest['quotaAnimation'],'quota');ready();pet.started=time.monotonic()-4.1;pet.animate();assert pet.mode=='idle'
         report['checks'].append('查询动作只播一次')
         press=SimpleNamespace(button=lambda:__import__('PySide6.QtCore',fromlist=['Qt']).Qt.MouseButton.LeftButton,globalPosition=lambda:QPointF(200,200))
         move=SimpleNamespace(buttons=press.button,globalPosition=lambda:QPointF(240,230))

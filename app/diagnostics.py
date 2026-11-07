@@ -5,6 +5,7 @@ import os
 import platform
 import sys
 import time
+import psutil
 
 from PySide6.QtCore import Qt, QTimer, QPointF, QRectF
 from PySide6.QtGui import QFont, QPainter, QPainterPath, QPalette, QPen
@@ -62,6 +63,7 @@ class DiagnosticsWindow(QWidget):
         self.statistics = ProcessStatistics()
         self.frames = PlaybackStatistics(time.monotonic())
         self.previous = None
+        self.decoder_previous = None
         self.disk_cache = ''
         self.timer = QTimer(self)
         self.timer.setInterval(1000)
@@ -135,10 +137,10 @@ class DiagnosticsWindow(QWidget):
         super().showEvent(event)
         if not self.timer.isActive():
             self.previous = self.statistics.read()
+            self.decoder_previous = None
             self.frames = PlaybackStatistics(self.previous.at)
             self.graph.values.clear(); self.graph.update()
-            # The original player's disk cache is read-only during playback.
-            # Scan once per opening, never on each sample or while closed.
+            # Legacy disk caches are no longer read by the streaming player.
             try:
                 size = sum(path.stat().st_size for path in
                            (self.root / 'app/cache').rglob('*') if path.is_file())
@@ -197,16 +199,16 @@ class DiagnosticsWindow(QWidget):
             label.setText(number(value))
         pet = self.pet
         item = pet.current or {}
-        count = len(pet.frames)
-        frame = pet.frames[pet.index] if count else None
+        buffered = pet.stream.statistics()
+        count = buffered['count']
+        frame = pet.frames[0] if pet.frames else None
         resolution = f'{frame.width()}×{frame.height()}' if frame else '未提供'
-        state = '隐藏' if pet.desktop_hidden() else ('播放' if pet.tick.isActive() else '暂停')
-        duration = item.get('durationMs', 0)
-        source_rate = f'{count * 1000 / duration:.1f}' if duration else '未提供'
+        state = '隐藏' if pet.desktop_hidden() else ('解码中' if pet.loading else ('播放' if pet.tick.isActive() else '暂停'))
+        source_rate = number(buffered['rate'])
         self.playback.setText(
-            f'整段预加载 · {item.get("name") or item.get("id", "未提供")} · {state}\n'
-            f'解码尺寸 {resolution} · 素材平均帧率 {source_rate} FPS\n'
-            f'帧 {pet.index + 1 if count else 0}/{count} · 累计 {self.frames.total} · '
+            f'有限预加载 · {item.get("name") or item.get("id", "未提供")} · {state}\n'
+            f'解码尺寸 {resolution} · 素材帧率 {source_rate} FPS\n'
+            f'帧 {0 if pet.loading else pet.source_index + 1}/{count if count is not None else "—"} · 累计 {self.frames.total} · '
             f'绘制 {number(draws)}/s')
         size, clips, frames = frame_cache_statistics(pet)
         cpu_text = (f'CPU 总体 {number(cpu / self.statistics.cores if cpu is not None else None)}%'
@@ -224,13 +226,14 @@ class DiagnosticsWindow(QWidget):
         if swap_rate is not None:
             swapins += f' · {byte_text(swap_rate)}/s'
         self.resources.setText(
-            f'{cpu_text}\n运行内存 (RAM) · {ram_scope} {ram}\n'
+            f'主进程 {cpu_text}\n主进程运行内存 (RAM) · {ram_scope} {ram}\n'
+            f'{self.decoder_text(buffered["pid"])}\n'
             f'GPU（应用组）{gpu_text}\n'
             f'本进程压缩 {byte_text(process.compressed)} · 系统 Swap {swap}\n'
             f'本进程 Swap-in：{swapins}\n'
             f'帧缓存像素估算 {byte_text(size)} · {clips} 段 / {frames} 帧\n'
-            f'整段预加载：开启 · 固定保留 {len(pet.pinned_frames)} 段\n'
-            f'动画磁盘缓存 {self.disk_cache}')
+            f'预加载缓冲 {buffered["buffered"]}/{buffered["capacity"]} 帧 · 全库预加载：关闭\n'
+            f'旧动画磁盘缓存 {self.disk_cache}（流式播放不读取）')
         sync = pet.desktop_sync
         watching = '观察中' if sync.timer.isActive() else '已停止'
         worker = pet.chat.worker if pet.chat else None
@@ -238,6 +241,28 @@ class DiagnosticsWindow(QWidget):
             f'只读同步 {watching} · 执行中 {len(sync.running)} · 已观察 {len(sync.known)}\n'
             f'连续读取失败 {sync.errors} 次\n'
             f'内置任务 {"执行中" if worker and worker.isRunning() else "空闲"}')
+
+    def decoder_text(self,pid):
+        if pid is None:
+            self.decoder_previous=None
+            return 'FFmpeg：未运行'
+        try:
+            decoder=psutil.Process(pid)
+            with decoder.oneshot():
+                times=decoder.cpu_times();ram=decoder.memory_info().rss
+            now=time.monotonic();seconds=times.user+times.system
+            cpu='等待采样'
+            if self.decoder_previous and self.decoder_previous[0]==pid:
+                _,before,previous=self.decoder_previous
+                cpu=f'{(seconds-previous)/(now-before)*100:.1f}%'
+            self.decoder_previous=(pid,now,seconds)
+            return f'FFmpeg · PID {pid} · CPU 单核基准 {cpu}\n解码进程运行内存 (RAM) · RSS {byte_text(ram)}'
+        except psutil.NoSuchProcess:
+            self.decoder_previous=None
+            return 'FFmpeg：本次解码进程已结束'
+        except psutil.AccessDenied as error:
+            self.decoder_previous=None
+            return f'FFmpeg 统计读取失败：{error}'
 
     def copy_information(self):
         values = ' · '.join(f'{title} {label.text()}' for title, label in

@@ -13,7 +13,7 @@ Windows轻量版：自移动、吸边探头、大小调节、Codex公开任务�
 3. 从完整Windows发布包复制整个 `outputs` 和 `tools` 文件夹到源码根目录，与 `app` 并列。保留全部35段WebM及素材清单。
 4. 执行 `python app/pet.py`；自检执行 `python app/pet.py --self-test`。
 
-程序通过FFmpeg的libvpx-vp9解码透明通道，保留动作预加载；请不要用丢弃透明通道的默认VP9解码方式替换。
+程序通过 FFmpeg 的 libvpx-vp9 解码透明通道。当前反哺分支使用后台有限预加载，默认 24 帧，设置及版本变化见 README.md 和 CHANGELOG.md。
 
 ## 构建Windows包
 

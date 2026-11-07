@@ -92,6 +92,13 @@ class MovementTests(unittest.TestCase):
         p.next_leisure_at=time.monotonic()+15;p.next_leisure_group="idle"
         p.auto_movement_disabled=False
         p.play(p.idles[0],'idle');p.move(200,200);p.bubble.hide()
+        self.ready()
+    def ready(self):
+        deadline=time.monotonic()+5
+        while self.pet.loading:
+            self.assertLess(time.monotonic(),deadline)
+            self.pet.animate();time.sleep(.005)
+        self.pet.tick.stop()
 
     def test_manual_edge_docking_and_recovery(self):
         p=self.pet;area=QApplication.primaryScreen().availableGeometry()
@@ -156,7 +163,8 @@ class MovementTests(unittest.TestCase):
     def test_preload_and_menu(self):
         p=self.pet;item=p.movement_slots[0]
         self.assertEqual(item['id'],'move02')
-        self.assertEqual(len(p.pinned_frames[str(p.asset_path(item))]),264)
+        p.play(item,'movement');self.ready()
+        self.assertEqual(p.stream.statistics()['count'],264)
         menu=p.context_menu();sub=next(a.menu() for a in menu.actions() if a.text()=='移动差分')
         self.assertEqual(sub.actions()[0].text(),'02 · 跑步（向右）');menu.deleteLater()
 
@@ -206,7 +214,8 @@ class MovementTests(unittest.TestCase):
         self.assertEqual(len(flights),2)
         for item in flights:
             self.assertEqual(item['durationMs'],9100)
-            self.assertEqual(len(p.pinned_frames[str(p.asset_path(item))]),273)
+            p.play(item,'movement');self.ready()
+            self.assertEqual(p.stream.statistics()['count'],273)
             with patch('pet.plan_movement',return_value=((320,200),False)) as planner:
                 self.assertTrue(p.start_movement(item,manual=True))
                 self.assertEqual(planner.call_args.kwargs['angle_range'],[45,80])

@@ -13,7 +13,8 @@ stage=OUT/f'release-v{VERSION}{edition}'
 source=stage/'repository/bailong-desktop-pet';portable=stage/'windows/BailongPet'
 source.mkdir(parents=True,exist_ok=True);(source/'app').mkdir(exist_ok=True)
 modules=['platform_support.py','mac_autostart.py','test_platform_support.py','test_preferences.py','desktop_task_sync.py','test_desktop_task_sync.py','pet.py','movement.py','test_movement.py','quota.py','autostart.py','prepare_assets.py','test_pet.py','selftest.py','version.py','test_quota.py','chat_backend.py','chat_ui.py','test_chat.py','desktop_visibility.py','test_visibility.py','test_session_reuse.py','test_task_notifications.py']
-modules.append('video_frames.py')
+modules.extend(['video_frames.py','frame_buffer.py','performance_settings.py','performance_metrics.py','diagnostics.py','test_frame_buffer.py'])
+shutil.copy2(ROOT/'CHANGELOG.md',source/'CHANGELOG.md')
 for name in modules:shutil.copy2(ROOT/'app'/name,source/'app'/name)
 shutil.copytree(ROOT/'app/sounds',source/'app/sounds',dirs_exist_ok=True)
 guide=(ROOT/'work/release_readme.txt').read_text(encoding='utf-8')
@@ -49,7 +50,7 @@ python -m venv .venv
 新增系统托盘、隐藏/显示桌宠、可开关的全屏自动隐藏，保留查询、拖拽、落地和屏幕边界限制。
 任务输入框、开启新对话、本机历史、公开思考摘要/执行进度实时显示、可滚动完整结果与详情。
 任务成功时播放一次点击音效和庆祝动画。工作01仅任务开场一次并显示收到提示；其余工作与待机按35:65分组选播，组内等概率并避免连续重复。
-15项互动与5项工作均可单击互动，手动工作动作显示台词，自动工作无动作台词。所有动作启动预加载。
+15项互动与5项工作均可单击互动，手动工作动作显示台词，自动工作无动作台词。当前动作后台有限预加载，画质与缓冲在性能设置中调整。
 基础两套待机平时4:1播放；新增待机03—06与六个移动动作按15秒规则交替，工作动作5项已接入，剩余1槽。
 对话功能需要使用者自己的Codex安装、登录与网络；对话历史不随包分发。
 额度查询需要使用者自己安装Codex并登录；离线动作无需账号。
