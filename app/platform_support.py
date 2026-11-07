@@ -10,7 +10,9 @@ def resource_root():
 
 def user_data():
     if os.environ.get('BAILONG_DATA_DIR'):return Path(os.environ['BAILONG_DATA_DIR'])
-    if sys.platform=='darwin':return Path.home()/'Library/Application Support/BailongPet'
+    # The independent Python macOS port owns BailongPet and uses a different
+    # history schema. Never read or overwrite that application's data here.
+    if sys.platform=='darwin':return Path.home()/'Library/Application Support/BailongPetOriginal'
     return Path(os.environ.get('LOCALAPPDATA') or Path.home()/'.local/share')/'BailongPet'
 
 def state_root():
@@ -18,18 +20,25 @@ def state_root():
 
 def configure_mac_window(widget):
     if sys.platform!='darwin':return
-    try:
-        import objc
-        from AppKit import (NSWindowCollectionBehaviorCanJoinAllSpaces,
-                            NSWindowCollectionBehaviorMoveToActiveSpace,
-                            NSWindowCollectionBehaviorFullScreenAuxiliary)
-        view=objc.objc_object(c_void_p=int(widget.winId()))
-        window=view.window()
-        # Qt tool windows can start with MoveToActiveSpace. AppKit rejects
-        # combining it with CanJoinAllSpaces; retain unrelated Qt flags.
-        behavior=window.collectionBehavior() & ~NSWindowCollectionBehaviorMoveToActiveSpace
-        window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
-    except (ImportError,AttributeError,ValueError):pass
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QApplication
+    widget.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
+    if QApplication.platformName()!='cocoa':return
+    import objc
+    from AppKit import (NSWindowCollectionBehaviorCanJoinAllSpaces,
+                        NSWindowCollectionBehaviorMoveToActiveSpace,
+                        NSWindowCollectionBehaviorFullScreenAuxiliary,
+                        NSFloatingWindowLevel)
+    view=objc.objc_object(c_void_p=int(widget.winId()))
+    window=view.window()
+    # Also update already-created NSPanel instances: changing the Qt attribute
+    # after winId()/show() does not update hidesOnDeactivate in Qt 6.9.2.
+    window.setHidesOnDeactivate_(False)
+    window.setLevel_(max(window.level(),NSFloatingWindowLevel))
+    # Qt tool windows can start with MoveToActiveSpace. AppKit rejects
+    # combining it with CanJoinAllSpaces; retain unrelated Qt flags.
+    behavior=window.collectionBehavior() & ~NSWindowCollectionBehaviorMoveToActiveSpace
+    window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
 
 def mac_fullscreen():
     try:

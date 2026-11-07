@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushB
     QInputDialog, QDialog, QDialogButtonBox)
 
 from chat_backend import HistoryStore, CodexSession, TaskCancelled
+from platform_support import configure_mac_window
 
 FLAGS = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool
 STYLE = '''QWidget {font-family:"Microsoft YaHei","Segoe UI";font-size:12px;color:#38294d;background:#fcfaff;}
@@ -58,6 +59,8 @@ class Composer(QWidget):
         from PySide6.QtGui import QShortcut, QKeySequence
         self.shortcut = QShortcut(QKeySequence('Ctrl+Return'), self)
         self.shortcut.activated.connect(self.submit)
+
+        configure_mac_window(self)
 
     def submit(self):
         text = self.editor.toPlainText().strip()
