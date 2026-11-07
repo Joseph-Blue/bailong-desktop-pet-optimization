@@ -4,6 +4,27 @@ from unittest.mock import patch
 import quota
 
 class Tests(unittest.TestCase):
+    def test_mac_bundled_codex_precedes_old_path_cli(self):
+        bundled='/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex'
+        old='/old/bin/codex'
+        with patch.object(quota.sys,'platform','darwin'),patch.dict(quota.os.environ,{'BAILONG_CODEX':''}),patch.object(Path,'is_file',autospec=True,side_effect=lambda p:str(p) in (bundled,old)),patch('quota.os.access',return_value=True),patch('quota.shutil.which',side_effect=lambda name:old if name=='codex' else None):
+            self.assertEqual(quota.find_codex(),bundled)
+
+    def test_explicit_codex_precedes_desktop_bundle(self):
+        explicit='/chosen/codex'
+        with patch.object(quota.sys,'platform','darwin'),patch.dict(quota.os.environ,{'BAILONG_CODEX':explicit}),patch.object(Path,'is_file',return_value=True),patch('quota.os.access',return_value=True),patch('quota.shutil.which',return_value='/old/bin/codex'):
+            self.assertEqual(quota.find_codex(),explicit)
+
+    def test_mac_falls_back_when_bundled_codex_not_executable(self):
+        old='/old/bin/codex'
+        with patch.object(quota.sys,'platform','darwin'),patch.dict(quota.os.environ,{'BAILONG_CODEX':''}),patch.object(Path,'is_file',return_value=True),patch('quota.os.access',return_value=False),patch('quota.shutil.which',side_effect=lambda name:old if name=='codex' else None):
+            self.assertEqual(quota.find_codex(),old)
+
+    def test_other_platforms_keep_path_selection(self):
+        for platform,name,executable in (('win32','codex.exe','C:/Codex/codex.exe'),('linux','codex','/usr/bin/codex')):
+            with self.subTest(platform=platform),patch.object(quota.sys,'platform',platform),patch.dict(quota.os.environ,{'BAILONG_CODEX':''}),patch.object(Path,'is_file',return_value=True),patch('quota.shutil.which',side_effect=lambda candidate:executable if candidate==name else None):
+                self.assertEqual(quota.find_codex(),executable)
+
     def test_transport_error_retries_once(self):
         error=quota.classify_error('failed to fetch codex rate limits: error sending request for url (https://example.invalid)','rate_limits')
         with patch('quota._read_quota_once',side_effect=[error,{'rateLimits':{}}]) as read,patch('quota.time.sleep'):

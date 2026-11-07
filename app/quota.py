@@ -46,7 +46,16 @@ def read_quota(timeout=20,cancel=None,attempts=2,log_path=None):
 def find_codex():
     """Find Codex even when a startup process has a minimal PATH."""
     override = os.environ.get('BAILONG_CODEX', '').strip().strip('"')
-    for candidate in (override, shutil.which('codex.exe'), shutil.which('codex')):
+    bundled = []
+    if sys.platform=='darwin':
+        # Prefer the desktop app's current CLI over an older standalone CLI.
+        for app in (Path('/Applications/Codex.app'),Path.home()/'Applications/Codex.app',
+                    Path('/Applications/ChatGPT.app'),Path.home()/'Applications/ChatGPT.app'):
+            for relative in ('Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex',
+                             'Contents/Resources/codex','Contents/Resources/codex-cli/codex'):
+                path=app/relative
+                if path.is_file() and os.access(path,os.X_OK):bundled.append(str(path))
+    for candidate in (override, *bundled, shutil.which('codex.exe'), shutil.which('codex')):
         if not candidate:
             continue
         resolved = Path(candidate).expanduser()
