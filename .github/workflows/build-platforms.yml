@@ -6,10 +6,18 @@ on:
         description: Release containing the Windows x86_64 package and original assets
         required: true
         default: v0.5.1-opt.13
+      build_macos:
+        description: Build macOS arm64
+        type: boolean
+        default: true
+      linux_families:
+        description: Linux families as a JSON array
+        default: '["debian","fedora","arch"]'
 permissions:
   contents: read
 jobs:
   macos:
+    if: inputs.build_macos
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -41,17 +49,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - family: debian
-            image: python:3.13-slim-bookworm
-            python: python3
-          - family: fedora
-            image: rockylinux:9
-            python: python3.11
-          - family: arch
-            image: archlinux:base
-            python: .build-python/bin/python3.13
-    container: ${{ matrix.image }}
+        family: ${{ fromJSON(inputs.linux_families) }}
+    container: ${{ matrix.family == 'debian' && 'python:3.13-slim-bookworm' || matrix.family == 'fedora' && 'fedora:45' || 'archlinux:base' }}
     defaults:
       run:
         shell: bash
@@ -66,18 +65,15 @@ jobs:
               apt-get install -y git build-essential binutils pkg-config nasm perl unzip libgl1 libegl1 libfontconfig1 libdbus-1-3 libx11-xcb1 libxrender1 libxext6 libsm6 libice6 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxkbcommon-x11-0 fonts-noto-cjk
               ;;
             fedora)
-              dnf install -y dnf-plugins-core
-              dnf config-manager --set-enabled crb
-              dnf install -y epel-release
-              dnf install -y git python3.11 python3.11-pip python3.11-devel gcc gcc-c++ make binutils pkgconf-pkg-config nasm perl unzip tar xz libglvnd-glx libglvnd-egl fontconfig dbus-libs libX11-xcb libXrender libXext libSM libICE libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 google-noto-sans-cjk-fonts
+              dnf install -y git uv gcc gcc-c++ make binutils pkgconf-pkg-config nasm perl unzip tar xz libglvnd-glx libglvnd-egl fontconfig dbus-libs libX11-xcb libXrender libXext libSM libICE libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 google-noto-sans-cjk-fonts
               ;;
             arch)
               pacman -Syu --noconfirm git uv base-devel binutils pkgconf nasm perl unzip libglvnd fontconfig dbus libx11 libxrender libxext libsm libice libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 noto-fonts-cjk
               ;;
           esac
       - uses: actions/checkout@v4
-      - name: Select Python 3.13 on Arch
-        if: matrix.family == 'arch'
+      - name: Select Python 3.13
+        if: matrix.family != 'debian'
         run: |
           uv python install 3.13
           uv venv --python 3.13 --seed .build-python
@@ -85,11 +81,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
-          PYTHON: ${{ matrix.python }}
+          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build-python/bin/python3.13' }}
         run: '"$PYTHON" work/fetch_release_assets.py'
       - name: Build decoder and application
         env:
-          PYTHON: ${{ matrix.python }}
+          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build-python/bin/python3.13' }}
           FAMILY: ${{ matrix.family }}
         run: |
           "$PYTHON" -m venv .venv-build-ci
@@ -103,6 +99,7 @@ jobs:
           path: .build-release/artifacts/*
   publish:
     needs: [macos, linux]
+    if: ${{ !cancelled() && needs.linux.result == 'success' && (needs.macos.result == 'success' || needs.macos.result == 'skipped') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write

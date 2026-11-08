@@ -214,7 +214,7 @@ GitHub Actions 的 **Build macOS and Linux packages** 工作流接受 Release �
 | --- | --- |
 | macOS arm64 | macOS 15 Apple Silicon |
 | Linux Debian / Ubuntu x86_64 | Debian 12 |
-| Linux Fedora / RHEL x86_64 | Rocky Linux 9 |
+| Linux Fedora x86_64 | Fedora 45 |
 | Linux Arch x86_64 | Arch Linux |
 
 工作流只编译、打包和上传，附件提供 SHA256。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。
