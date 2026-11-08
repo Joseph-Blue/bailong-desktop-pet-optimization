@@ -1,6 +1,7 @@
 # 白龙桌宠 v0.5.1 · 优化与修复
 
-基于 [jingh12312-rgb 原作者 v0.5.1](https://github.com/jingh12312-rgb/bailong-desktop-pet/tree/b102e734f20bb50889af12df5778f1499109f41b)，整理可反哺原项目的性能、界面和平台修复。沿用 Python、PySide6、精简版 FFmpeg 及原作者的角色与动作体系。不要将本仓库视为原作者的官方发布，也绝无长期维护的可能。**本项目也不是我正在进行的 MacOS Swift + Appkit 原生移植、独立维护的项目，注意区分。**
+基于 [jingh12312-rgb 原作者 v0.5.1](https://github.com/jingh12312-rgb/bailong-desktop-pet/tree/b102e734f20bb50889af12df5778f1499109f41b)，整理可反哺原项目的性能、界面和平台修复。沿用 Python、PySide6、精简版 FFmpeg 及原作者的角色与动作体系。不要将本仓库视为原作者的官方发布，也绝无长期维护的可能。
+**本项目也不是我正在进行的另一个 MacOS Swift + Appkit 原生移植、独立维护的项目，注意区分。**
 
 ## 这次解决的痛点与新增功能
 
