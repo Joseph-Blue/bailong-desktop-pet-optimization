@@ -5,6 +5,7 @@
 检查并补齐 Windows 构建依赖，生成完整目录包，可选 ZIP。
 .DESCRIPTION
 自动选择 64 位 Python 3.11～3.13。
+可运行目录与 ZIP 均放在仓库根目录的 dist-windows/。
 使用独立虚拟环境，仅当依赖缺失、版本不符或 pip check 失败时安装依赖。
 .PARAMETER Python
 首次建环境所用的解释器路径或命令名；不传时检查 PATH 和 py 启动器登记的解释器。
@@ -21,6 +22,7 @@ param(
     [string]$Python = 'python',
     [string]$FFmpeg = '',
     [switch]$SkipInstall,
+    [Alias('Archive')]
     [switch]$Zip
 )
 $ErrorActionPreference = 'Stop'
@@ -42,7 +44,7 @@ function Assert-BuildPython([string]$Program, [bool]$Existing = $false) {
     & $Program 'work/build_common.py'
     if ($LASTEXITCODE -ne 0) {
         $Message = "Python 不符合构建要求（退出码 $LASTEXITCODE）。`n$PythonInstallHint"
-        if ($Existing) { $Message += "`n移走 .venv-build-windows 后重新运行构建脚本。" }
+        if ($Existing) { $Message += "`n移走 .build/venvs/windows 后重新运行构建脚本。" }
         throw $Message
     }
 }
@@ -74,7 +76,7 @@ function Find-BuildPython {
     throw "未找到 64 位 Python 3.11～3.13。`n$PythonInstallHint`n已有合适版本时，用 -Python 指定 python.exe。"
 }
 
-$VenvPython = Join-Path $PSScriptRoot '.venv-build-windows/Scripts/python.exe'
+$VenvPython = Join-Path $PSScriptRoot '.build/venvs/windows/Scripts/python.exe'
 $HasVenv = Test-Path -LiteralPath $VenvPython -PathType Leaf
 if (-not $HasVenv) {
     if ($SkipInstall) { throw '构建环境不存在；请先去掉 -SkipInstall 运行。' }
@@ -86,7 +88,7 @@ if (-not $HasVenv) {
     }
     $Python = ($PythonCommand | Select-Object -First 1).Source
 } elseif ($PSBoundParameters.ContainsKey('Python')) {
-    Write-Host '复用 .venv-build-windows；-Python 仅用于首次创建。'
+    Write-Host '复用 .build/venvs/windows；-Python 仅用于首次创建。'
 }
 
 if (-not $FFmpeg) { $FFmpeg = $env:BAILONG_BUILD_FFMPEG }
@@ -95,14 +97,16 @@ if ($FFmpeg) {
 }
 $PreviousPythonUtf8 = $env:PYTHONUTF8
 $PreviousPyInstallerConfig = $env:PYINSTALLER_CONFIG_DIR
+$PreviousPythonCache = $env:PYTHONPYCACHEPREFIX
 Push-Location -LiteralPath $PSScriptRoot
 try {
     $env:PYTHONUTF8 = '1'
-    $env:PYINSTALLER_CONFIG_DIR = Join-Path $PSScriptRoot '.build-windows/pyinstaller-cache'
+    $env:PYINSTALLER_CONFIG_DIR = Join-Path $PSScriptRoot '.build/cache/pyinstaller-windows'
+    $env:PYTHONPYCACHEPREFIX = Join-Path $PSScriptRoot '.build/cache/python'
     if (-not $HasVenv) {
         Write-Host "创建构建环境，使用 Python：$Python"
         Assert-BuildPython $Python
-        Invoke-Checked $Python @('-m', 'venv', '.venv-build-windows')
+        Invoke-Checked $Python @('-m', 'venv', '.build/venvs/windows')
     }
     Assert-BuildPython $VenvPython $true
     Write-Host '检查构建依赖及版本...'
@@ -133,5 +137,6 @@ try {
 } finally {
     $env:PYTHONUTF8 = $PreviousPythonUtf8
     $env:PYINSTALLER_CONFIG_DIR = $PreviousPyInstallerConfig
+    $env:PYTHONPYCACHEPREFIX = $PreviousPythonCache
     Pop-Location
 }

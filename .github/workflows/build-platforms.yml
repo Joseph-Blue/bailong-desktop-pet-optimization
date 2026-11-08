@@ -1,11 +1,11 @@
-name: Build macOS and Linux packages
+name: Build and release five platform packages
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release containing the Windows x86_64 package and original assets
+        description: Tag to publish
         required: true
-        default: v0.5.1-opt.14
+        default: v0.5.1-opt.22
       build_macos:
         description: Build macOS arm64
         type: boolean
@@ -16,6 +16,27 @@ on:
 permissions:
   contents: read
 jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Prepare original assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python work/fetch_release_assets.py
+      - name: Build complete Windows package
+        shell: pwsh
+        run: ./build-windows.ps1 -Zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x86_64
+          path: dist-windows/*.zip
+          if-no-files-found: error
   macos:
     if: inputs.build_macos
     runs-on: macos-15
@@ -29,7 +50,6 @@ jobs:
       - name: Prepare assets
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
         run: python work/fetch_release_assets.py
       - name: Build decoder and application
         run: |
@@ -37,12 +57,12 @@ jobs:
           brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
           python -m pip install -r requirements-build.txt -r requirements-macos.txt
           python work/build_minimal_ffmpeg.py
-          python work/build_macos.py --ffmpeg .build-ffmpeg/darwin-arm64/bin/ffmpeg
+          python work/build_macos.py --ffmpeg .build/ffmpeg/darwin-arm64/bin/ffmpeg
           python work/archive_platform.py --platform macos --directory dist-macos/BailongPet.app
       - uses: actions/upload-artifact@v4
         with:
           name: macos-arm64
-          path: .build-release/artifacts/*.zip
+          path: dist-macos/*.zip
   linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -50,7 +70,7 @@ jobs:
       fail-fast: false
       matrix:
         family: ${{ fromJSON(inputs.linux_families) }}
-    container: ${{ matrix.family == 'debian' && 'python:3.13-slim-bookworm' || matrix.family == 'fedora' && 'fedora:45' || 'archlinux:base' }}
+    container: ${{ matrix.family == 'debian' && 'python:3.13-slim-bookworm' || matrix.family == 'fedora' && 'fedora:44' || 'archlinux:base' }}
     defaults:
       run:
         shell: bash
@@ -62,13 +82,13 @@ jobs:
           case "$FAMILY" in
             debian)
               apt-get update
-              apt-get install -y git build-essential binutils pkg-config nasm perl unzip libgl1 libegl1 libfontconfig1 libdbus-1-3 libx11-xcb1 libxrender1 libxext6 libsm6 libice6 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxkbcommon-x11-0 fonts-noto-cjk
+              apt-get install -y git build-essential binutils pkg-config nasm perl unzip pulseaudio-utils libgl1 libegl1 libfontconfig1 libdbus-1-3 libx11-xcb1 libxrender1 libxext6 libsm6 libice6 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxkbcommon-x11-0 fonts-noto-cjk
               ;;
             fedora)
-              dnf install -y git uv gcc gcc-c++ make binutils pkgconf-pkg-config nasm perl unzip tar xz libglvnd-glx libglvnd-egl fontconfig dbus-libs libX11-xcb libXrender libXext libSM libICE libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 google-noto-sans-cjk-fonts
+              dnf install -y git uv gcc gcc-c++ make binutils pkgconf-pkg-config nasm perl unzip tar xz pulseaudio-utils libglvnd-glx libglvnd-egl fontconfig dbus-libs libX11-xcb libXrender libXext libSM libICE libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 google-noto-sans-cjk-fonts
               ;;
             arch)
-              pacman -Syu --noconfirm git uv base-devel binutils pkgconf nasm perl unzip libglvnd fontconfig dbus libx11 libxrender libxext libsm libice libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 noto-fonts-cjk
+              pacman -Syu --noconfirm git uv base-devel binutils pkgconf nasm perl unzip libpulse libglvnd fontconfig dbus libx11 libxrender libxext libsm libice libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 noto-fonts-cjk
               ;;
           esac
       - uses: actions/checkout@v4
@@ -76,41 +96,51 @@ jobs:
         if: matrix.family != 'debian'
         run: |
           uv python install 3.13
-          uv venv --python 3.13 --seed .build-python
+          uv venv --python 3.13 --seed .build/venvs/ci-bootstrap
       - name: Prepare assets
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build-python/bin/python3.13' }}
+          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build/venvs/ci-bootstrap/bin/python3.13' }}
         run: '"$PYTHON" work/fetch_release_assets.py'
       - name: Build decoder and application
         env:
-          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build-python/bin/python3.13' }}
+          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build/venvs/ci-bootstrap/bin/python3.13' }}
           FAMILY: ${{ matrix.family }}
         run: |
-          "$PYTHON" -m venv .venv-build-ci
-          .venv-build-ci/bin/python -m pip install -r requirements-build.txt
-          .venv-build-ci/bin/python work/build_minimal_ffmpeg.py
-          .venv-build-ci/bin/python work/build_linux.py --family "$FAMILY" --ffmpeg .build-ffmpeg/linux-x86_64/bin/ffmpeg
-          .venv-build-ci/bin/python work/archive_platform.py --platform linux --family "$FAMILY" --directory "dist-linux/$FAMILY-x86_64/BailongPet"
+          "$PYTHON" -m venv .build/venvs/ci
+          .build/venvs/ci/bin/python -m pip install -r requirements-build.txt
+          .build/venvs/ci/bin/python work/build_minimal_ffmpeg.py
+          .build/venvs/ci/bin/python work/build_linux.py --family "$FAMILY" --ffmpeg .build/ffmpeg/linux-x86_64/bin/ffmpeg
+          .build/venvs/ci/bin/python work/archive_platform.py --platform linux --family "$FAMILY" --directory "dist-linux/$FAMILY-x86_64/BailongPet"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.family }}-x86_64
-          path: .build-release/artifacts/*.tar.gz
+          path: dist-linux/*/*.tar.gz
+          if-no-files-found: error
   publish:
-    needs: [macos, linux]
-    if: ${{ !cancelled() && needs.linux.result == 'success' && (needs.macos.result == 'success' || needs.macos.result == 'skipped') }}
+    needs: [windows, macos, linux]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: packages
           merge-multiple: true
-      - name: Attach packages to Release
+      - name: Publish complete packages
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "$RELEASE_TAG" packages/*
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          mkdir -p .build
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          text = Path('work/platform_release_notes.md').read_text(encoding='utf-8')
+          text = text.replace('{{TAG}}', os.environ['RELEASE_TAG'])
+          text = text.replace('{{REPO}}', os.environ['GH_REPO'])
+          Path('.build/release-notes.md').write_text(text, encoding='utf-8')
+          PY
+          gh release create "$RELEASE_TAG" packages/* --verify-tag --title "$RELEASE_TAG · Windows / macOS / Linux" --notes-file .build/release-notes.md

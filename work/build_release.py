@@ -6,7 +6,7 @@ import ast,html,json,shutil,zipfile,hashlib,sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app'))
 from version import VERSION
-OUT=ROOT/'发布包'
+OUT=ROOT/'dist-windows'
 webm=json.loads((ROOT/'outputs/白龙桌宠素材/素材清单.json').read_text(encoding='utf-8'))['idle'].get('playbackFile','').endswith('.webm')
 edition='-webm' if webm else ''
 stage=OUT/f'release-v{VERSION}{edition}'
@@ -119,7 +119,7 @@ for meta in (Path(sys.prefix)/'conda-meta').glob('*.json'):
         collected.append({'name':data['name'],'version':data['version'],'license':data.get('license'),'licenseFilesIncluded':folder.is_dir()})
 (licenses/'components.json').write_text(json.dumps(collected,ensure_ascii=False,indent=2),encoding='utf-8')
 shutil.copy2(ROOT/'app/sounds/Kenney-License.txt',licenses/'Kenney-License.txt')
-pyi_license=ROOT/'.build-tools/pyinstaller-6.22.3.dist-info/licenses/COPYING.txt'
+pyi_license=ROOT/'.build/tools/pyinstaller-6.22.3.dist-info/licenses/COPYING.txt'
 if pyi_license.exists():shutil.copy2(pyi_license,licenses/'PyInstaller-COPYING.txt')
 (licenses/'说明.txt').write_text('本文件夹保留随包运行库的许可文本。源码项目和美术素材的许可另见ASSETS.md。Qt/PySide来源：https://download.qt.io/official_releases/QtForPython/ 和 https://download.qt.io/official_releases/qt/6.9/ 。\n',encoding='utf-8')
 
@@ -130,7 +130,8 @@ for folder in [source,portable]:
 
 archives=[]
 for folder,suffix in [(portable,'windows-x64'+edition)]:
-    zip_path=OUT/f'bailong-desktop-pet-v{VERSION}-{suffix}.zip'
+    zip_path=ROOT/'dist-windows'/f'bailong-desktop-pet-v{VERSION}-{suffix}.zip'
+    zip_path.parent.mkdir(parents=True,exist_ok=True)
     with zipfile.ZipFile(zip_path,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as zip:
         for p in sorted(folder.rglob('*')):
             if p.is_file() and '__pycache__' not in p.parts and p.name not in ('运行状态.json','自启动状态.json','检查报告.json','检查预览.png','额度查询日志.jsonl','conversations.json','conversations.tmp'):

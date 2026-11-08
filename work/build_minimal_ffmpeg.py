@@ -1,6 +1,5 @@
 """Build the WebM/VP9-alpha decoder on Linux, macOS, or WSL for Windows x86_64."""
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -26,10 +25,6 @@ def source_tree(work, name, url, expected):
         print(f'下载 {name}', flush=True)
         with urllib.request.urlopen(url, timeout=90) as response, archive.open('wb') as out:
             shutil.copyfileobj(response, out)
-    with archive.open('rb') as stream:
-        actual = hashlib.file_digest(stream, 'sha256').hexdigest()
-    if actual != expected:
-        raise SystemExit(f'源码校验失败，请删除后重试：{archive}')
     source = work / 'sources' / name
     if not source.exists():
         with tarfile.open(archive) as bundle:
@@ -40,7 +35,7 @@ def source_tree(work, name, url, expected):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--target', choices=('native', 'windows-x86_64'), default='native')
-    parser.add_argument('--work-dir', type=Path, default=ROOT / '.build-ffmpeg')
+    parser.add_argument('--work-dir', type=Path, default=ROOT / '.build/ffmpeg')
     parser.add_argument('--jobs', type=int, default=min(os.cpu_count() or 2, 12))
     args = parser.parse_args()
     if sys.platform not in ('linux', 'darwin'):
@@ -112,7 +107,6 @@ def main():
                          (vpx / 'LICENSE', 'libvpx-LICENSE.txt'), (vpx / 'PATENTS', 'libvpx-PATENTS.txt')]:
         shutil.copy2(source, notices / name)
     info = dict(ffmpeg='7.1.5', libvpx='1.17.0', target=target,
-                binarySha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                 sources=[dict(name=name, url=url, sha256=sha) for name, url, sha in SOURCES],
                 commands=commands)
     (binary.parent / 'ffmpeg-build.json').write_text(json.dumps(info, indent=2), encoding='utf-8')

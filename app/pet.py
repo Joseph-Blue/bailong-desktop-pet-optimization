@@ -1,6 +1,11 @@
 import json, random, sys, time, threading, os
 from pathlib import Path
 from datetime import datetime
+
+if sys.platform.startswith('linux'):
+    os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
+    os.environ.setdefault('QT_IM_MODULE', 'ibus')
+
 from PySide6.QtCore import Qt, QTimer, QThread, Signal, QPoint, QPointF, QRect, QRectF, QSize, QSettings, QEvent
 from PySide6.QtGui import QImage, QPixmap, QPainter, QRegion, QCursor, QIcon, QTransform
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QProgressBar, QMenu, QMessageBox, QPushButton, QSystemTrayIcon, QTextBrowser, QSlider, QDialog, QCheckBox
@@ -10,7 +15,7 @@ from version import VERSION, BASE_VERSION, BRANCH, platform_version
 from movement import plan_movement, movement_fraction
 from frame_buffer import FrameBuffer
 from performance_preferences import read_performance_preferences, decode_size, fps_cap
-from performance_ui import readable_font
+from performance_ui import readable_font, configure_linux_dialog
 
 from platform_support import resource_root,state_root,configure_mac_window
 ROOT=resource_root()
@@ -76,7 +81,14 @@ class Bubble(QWidget):
             if button is not self.close_button:
                 button.setStyleSheet(f'color:#60358c;background:#eee5f7;border:0;border-radius:7px;padding:{max(3,round(7*s))}px;')
         self.close_button.setStyleSheet('QPushButton {color:#776783;background:transparent;border:0;border-radius:8px;} QPushButton:hover {background:#eee5f7;color:#503768;}')
-        self.adjustSize();self.close_button.move(self.width()-self.close_button.width()-5,5);self.close_button.raise_()
+        for index in range(self.layout.count()):
+            self.layout.itemAt(index).widget().show()
+        self.ensurePolished()
+        self.layout.invalidate()
+        height=self.layout.totalHeightForWidth(self.width()) if self.layout.hasHeightForWidth() else self.layout.sizeHint().height()
+        self.resize(self.width(),height)
+        self.layout.activate()
+        self.close_button.move(self.width()-self.close_button.width()-5,5);self.close_button.raise_()
     def paintEvent(self,event):
         painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setBrush(Qt.GlobalColor.white);painter.setPen(Qt.GlobalColor.transparent)
@@ -492,7 +504,9 @@ class Pet(QWidget):
             self.display_item=self.current
             if self.reference_frame is None:
                 self.reference_frame=self.frames[0]
-                icon=QIcon(self.reference_frame);self.setWindowIcon(icon);self.tray.setIcon(icon)
+                icon=QIcon(self.reference_frame)
+                QApplication.setWindowIcon(icon)
+                self.setWindowIcon(icon);self.tray.setIcon(icon)
                 if QSystemTrayIcon.isSystemTrayAvailable():self.tray.show()
             if self.loading:self.loading=False;self.started=time.monotonic()
             self.update_frame()
@@ -731,6 +745,7 @@ class Pet(QWidget):
     def show_bubble_settings(self):
         if not hasattr(self,'bubble_settings_dialog'):
             dialog=QDialog(self,Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
+            configure_linux_dialog(dialog)
             dialog.setWindowTitle('对话框大小与提醒');layout=QVBoxLayout(dialog)
             layout.setContentsMargins(18,16,18,16);layout.setSpacing(14)
             label=QLabel(dialog);slider=QSlider(Qt.Orientation.Horizontal,dialog)
@@ -762,6 +777,7 @@ class Pet(QWidget):
     def show_size_dialog(self):
         if not hasattr(self,'size_dialog'):
             dialog=QDialog(self,Qt.WindowType.Tool|Qt.WindowType.WindowStaysOnTopHint)
+            configure_linux_dialog(dialog)
             dialog.setWindowTitle('调节桌宠大小');layout=QVBoxLayout(dialog)
             layout.setContentsMargins(18,16,18,16);layout.setSpacing(14)
             label=QLabel(dialog);slider=QSlider(Qt.Orientation.Horizontal,dialog)
@@ -831,6 +847,12 @@ class Pet(QWidget):
         self.click_timer.stop();self.last_click=None;self.generation+=1;self.play(item,'idle')
     def play_click_sound(self):
         if self.sound_disabled:return
+        if sys.platform.startswith('linux'):
+            import subprocess
+            environment=os.environ.copy()
+            environment['LD_LIBRARY_PATH']=environment.get('LD_LIBRARY_PATH_ORIG','')
+            self.click_sound_process=subprocess.Popen(['/usr/bin/paplay',str(ROOT/'app/sounds/click.wav')],env=environment)
+            return
         if sys.platform=='darwin':
             from PySide6.QtMultimedia import QSoundEffect
             from PySide6.QtCore import QUrl
@@ -944,6 +966,8 @@ def main():
         from selftest import run
         return run(ROOT)
     app=QApplication(sys.argv)
+    if sys.platform.startswith('linux'):
+        app.setDesktopFileName('bailong-desktop-pet')
     app.setQuitOnLastWindowClosed(False)
     if '--enable-autostart' in sys.argv or '--disable-autostart' in sys.argv:
         from autostart import enable_autostart,disable_autostart

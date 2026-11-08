@@ -12,6 +12,7 @@ def archive_build(output):
     arch = platform.machine().lower()
     arch = {'amd64': 'x86_64', 'x64': 'x86_64', 'aarch64': 'arm64'}.get(arch, arch)
     name = output.parent.parent / f'bailong-desktop-pet-v{VERSION}-windows-{arch}'
+    name.parent.mkdir(parents=True, exist_ok=True)
     archive = Path(shutil.make_archive(str(name), 'zip', root_dir=output.parent,
                                       base_dir=output.name))
     print(f'本地 ZIP：{archive}', flush=True)

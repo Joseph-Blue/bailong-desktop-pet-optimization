@@ -2,6 +2,53 @@
 
 原作者基线为 `0.5.1`。本文件记录优化分支，版本格式为 `0.5.1-opt.N`。
 
+## 0.5.1-opt.22 · 2026-11-08
+
+- Linux 的短 WAV 音效改用系统 paplay，移除 QtMultimedia 及附带的多媒体运行库；Debian/Fedora 依赖 pulseaudio-utils，Arch 依赖 libpulse。
+- 保留 GTK 主题与桌面门户插件、系统字体及输入法接入。KDE 当前采用 Fusion 样式，未加载 GTK 主题插件。
+- 按用户要求恢复私有仓库 Release 发布，统一构建 Windows x86_64、macOS arm64、Debian/Arch/Fedora x86_64 五份完整运行包。
+
+## 0.5.1-opt.21 · 2026-11-08
+
+- Linux 构建排除未使用的 Qt PDF 图片、虚拟键盘和 Pillow AVIF 解码器；保留 QtMultimedia 音效后端及其 QML/Quick 运行库、IBus/Compose 输入上下文、XCB/Wayland 和桌面主题组件。
+- Linux 优先使用本机 `.build/ffmpeg/linux-<architecture>/bin/ffmpeg` 精简解码器，保留显式 FFmpeg 参数与仓库 tools/ 优先级；原始素材和播放逻辑不变。
+- Fedora x86_64 目录包从 443.88 MiB 降至 358.63 MiB，减少 85.24 MiB（19.2%）；其中 146.77 MiB 原始素材保持不变。
+
+## 0.5.1-opt.20 · 2026-11-08
+
+- 可运行产物改放可见的 dist-linux/、dist-macos/、dist-windows/，Linux 按 Debian、Arch、Fedora 与架构分目录；压缩包放对应平台目录。缓存、中间文件和默认虚拟环境集中在 .build/；素材与用户数据留在原位置，构建入口及自动工作流同步路径。
+- 用户反馈上一版已通过初步实机测试。本次交付 Linux 目录包，不生成新 RPM。
+
+## 0.5.1-opt.19 · 2026-11-08
+
+- Fedora 构建入口增加 --rpm，生成包含独立运行库、素材、应用菜单和待机图标的本地 RPM 试装包；应用安装至 /opt/bailong-desktop-pet。
+- Linux 运行状态与日志改存用户 XDG 数据目录，支持系统只读安装目录；已有对话和设置保留。卸载应用包不删除用户数据。
+
+## 0.5.1-opt.18 · 2026-11-08
+
+- Windows 保留 PowerShell，macOS / Linux 保留 Bash；统一解释器选择、依赖检查与按需安装、跳过安装、FFmpeg 参数和中文进度。Bash 新增 --python、--archive；Windows -Archive 等价于原有 -Zip。
+- 修复 Linux 未接入点击音效播放，使用 Qt QSoundEffect。
+- 修复连续互动时气泡文字被裁切：先显示新内容，再按实际宽度计算换行高度。
+- 应用窗口统一使用待机首帧图标，与托盘一致；Linux 构建同时生成 BailongPet.png。
+
+## 0.5.1-opt.17 · 2026-11-08
+
+- 修正 Linux 中文输入：默认通过 Qt IBus 插件连接 fcitx5 的 IBus 前端，替换未接通 fcitx5 的 compose/xim 路径。保留显式设置的 QT_IM_MODULE。
+- Linux 性能设置、性能统计及详情、桌宠大小和气泡提醒设置窗口保留最小化与关闭按钮，移除最大化；历史消息窗口保持原样。
+
+## 0.5.1-opt.16 · 2026-11-08
+
+- Linux 打包程序默认使用 XCB / XWayland，使无边框桌宠在 KDE Plasma Wayland 下与 `run.sh` 保持相同的拖动和自动移动行为。
+- Linux 打包程序通过 Qt XIM 输入上下文连接 fcitx5 等非系统输入法。
+- Linux 增加 Codex Desktop 内置 CLI 路径，从图形桌面直接启动时不再依赖终端 PATH。
+- 移除本项目对 `qt-ui-design` skill 的强制要求。
+
+## 0.5.1-opt.15 · 2026-11-08
+
+- 本工程改为仅提供源码与本地构建入口，不再创建或更新 GitHub Release。
+- macOS / Linux 工作流仅保留临时 Actions 构建产物，素材直接取自原作者 v0.5.1 完整包。
+- Fedora x86_64 已使用 Python 3.13.18 和原作者的 35 段 WebM 素材重新构建。
+
 ## 0.5.1-opt.14 · 2026-11-08
 
 - 补充按需解码带来的加载速度改善：首批画面就绪即可播放，大幅缩短启动及切换动作时的等待；后续帧按播放进度补充。

@@ -13,10 +13,12 @@ def user_data():
     # The independent Python macOS port owns BailongPet and uses a different
     # history schema. Never read or overwrite that application's data here.
     if sys.platform=='darwin':return Path.home()/'Library/Application Support/BailongPetOriginal'
+    if sys.platform.startswith('linux'):
+        return Path(os.environ.get('XDG_DATA_HOME') or Path.home()/'.local/share')/'BailongPet'
     return Path(os.environ.get('LOCALAPPDATA') or Path.home()/'.local/share')/'BailongPet'
 
 def state_root():
-    return user_data() if sys.platform=='darwin' else resource_root()
+    return user_data() if sys.platform=='darwin' or sys.platform.startswith('linux') else resource_root()
 
 def configure_mac_window(widget):
     if sys.platform!='darwin':return

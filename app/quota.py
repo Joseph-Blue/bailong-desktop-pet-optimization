@@ -65,6 +65,14 @@ def find_codex():
         if located:
             return located
     profile = Path(os.environ.get('USERPROFILE') or Path.home())
+    if sys.platform.startswith('linux'):
+        for path in (Path('/usr/lib/chatgpt/resources/codex'),
+                     Path('/usr/lib/codex/resources/codex'),
+                     Path('/usr/local/bin/codex'), Path('/usr/bin/codex'),
+                     profile/'.local/bin/codex'):
+            if path.is_file() and os.access(path, os.X_OK):
+                return str(path)
+        raise RuntimeError('没有找到 Codex。请安装 Codex，或设置 BAILONG_CODEX 指向 codex 可执行文件。')
     if sys.platform=='darwin':
         for path in (Path('/Applications/Codex.app/Contents/Resources/codex'),profile/'Applications/Codex.app/Contents/Resources/codex',Path('/opt/homebrew/bin/codex'),Path('/usr/local/bin/codex'),profile/'.local/bin/codex'):
             if path.is_file() and os.access(path,os.X_OK):return str(path)

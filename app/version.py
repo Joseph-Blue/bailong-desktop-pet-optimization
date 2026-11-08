@@ -4,7 +4,7 @@ import sys
 
 BASE_VERSION = '0.5.1'
 BRANCH = 'joseph/optimization'
-BRANCH_REVISION = 14
+BRANCH_REVISION = 22
 VERSION = f'{BASE_VERSION}-opt.{BRANCH_REVISION}'
 
 

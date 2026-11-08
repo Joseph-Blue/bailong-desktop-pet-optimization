@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.14`。本地脚本生成目录包与压缩包，GitHub Release 提供各平台下载。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.22`。私有仓库 Release 提供五平台完整运行包；本地脚本也可在目标系统生成目录包与可选压缩包。
 
 ## 所有平台先准备
 
@@ -17,7 +17,7 @@
 | imageio-ffmpeg | 不需要 Python 包 | 默认构建依赖，提供 FFmpeg；手动流程已有合适 FFmpeg 时可替代它 |
 | PowerShell 7 | 不需要 | 不必安装，自动化脚本支持系统自带的 Windows PowerShell 5.1；直接使用 Python 入口也不依赖 PS 脚本 |
 | 虚拟环境 | 不需要 | 是默认脚本的隔离方式，不是 PyInstaller 的硬性要求；不必手动激活 |
-| `.build-tools` | 不需要 | 原作的包安装目录约定，本分支不需要 |
+| `.build/tools` | 不需要 | 原作的包安装目录约定，本分支不需要 |
 | Visual Studio／Qt SDK／Conda／uv | 不需要 | Windows 默认使用预编译 wheel，不要求这些工具；不要为本脚本额外安装整套开发工具链 |
 | Codex 安装与登录 | 只在使用对话、额度和同步功能时需要 | 构建本身不需要登录，也不读取聊天数据 |
 
@@ -29,9 +29,20 @@
 2. 从[原作者 v0.5.1 完整 Windows 包](https://github.com/jingh12312-rgb/bailong-desktop-pet/releases/tag/v0.5.1)取出 `outputs/白龙桌宠素材`，放到仓库同名路径；保留素材清单及原目录结构。各平台共用这些原始 WebM，不使用 Swift 工程转换后的素材。
 3. FFmpeg 选择顺序为：脚本 `--ffmpeg`／`-FFmpeg` 参数、`BAILONG_BUILD_FFMPEG` 环境变量、仓库 `tools/ffmpeg[.exe]`、`imageio-ffmpeg` 包提供的本机二进制。跨平台复制素材时不要把 Windows 的 ffmpeg.exe 当作 macOS／Linux 解码器。自备 FFmpeg 必须能在构建机器运行，并包含 `libvpx-vp9`。
 
-Windows 默认脚本先检查已安装依赖，缺失、版本不符或依赖关系冲突时才通过 pip 补齐；macOS／Linux 默认执行 pip 安装。没有本地缓存时安装需要网络；都不改系统 Python 的包。`imageio-ffmpeg` 只用于提供构建时的 FFmpeg，运行包不需要 Python 环境。构建目录只包含清单引用的动画，不复制用户历史、状态文件或整个源码目录。
+所有平台入口先检查已安装依赖，缺失、版本不符或依赖关系冲突时才通过 pip 补齐。没有本地缓存时安装需要网络；都不改系统 Python 的包。`imageio-ffmpeg` 只用于提供构建时的 FFmpeg，运行包不需要 Python 环境。构建目录只包含清单引用的动画，不复制用户历史、状态文件或整个源码目录。
 
-仓库忽略 `outputs/`、`tools/`、`.venv-build*/`、`.build*/`、`dist-macos/`、`dist-linux/` 和 `发布包/`。缺少素材会直接报出路径。
+Windows 使用 PowerShell，其他平台使用 Bash。共同参数如下：
+
+| 用途 | PowerShell | Bash |
+| --- | --- | --- |
+| 首次创建环境的解释器 | `-Python 路径` | `--python 路径` |
+| 指定 FFmpeg | `-FFmpeg 路径` | `--ffmpeg 路径` |
+| 只检查依赖并重新打包 | `-SkipInstall` | `--skip-install` |
+| 生成本地压缩包 | `-Archive`（兼容 `-Zip`） | `--archive` |
+
+自动选择已安装的 64 位 Python 3.11～3.13；已有构建环境继续复用。解释器与 FFmpeg 参数都是单个路径或命令名，不附加命令参数；相对路径按调用位置解析。Bash 继续支持 `PYTHON`、`BUILD_VENV` 和 `BAILONG_BUILD_FFMPEG` 环境变量，命令行参数优先。Linux 另有 `--install-deps`，与 `--skip-install` 互斥。
+
+可运行目录和压缩包放在可见的 `dist-windows/`、`dist-macos/`、`dist-linux/`；Linux 分为 `debian-<architecture>/`、`arch-<architecture>/`、`fedora-<architecture>/`，各阵营的包互不混放。被 Git 忽略的 `.build/` 仅集中构建虚拟环境 `venvs/`、中间文件 `work/`、缓存 `cache/`、解码器构建 `ffmpeg/` 和下载缓存 `downloads/`。`outputs/` 原始素材与用户数据不迁移。缺少素材会直接报出路径。
 
 ## Windows：PowerShell 5.1／7+
 
@@ -59,7 +70,7 @@ winget install --id Python.Python.3.13 --exact
 
 脚本按以下顺序执行：
 
-1. 复用已有 `.venv-build-windows`；首次运行时，使用显式 `-Python`，或依次探测 PATH 的 `python.exe` 和 `py -0p` 登记的解释器，选择满足版本与位数要求的解释器。不自动下载 Python，也不调用 Microsoft Store 安装别名。
+1. 复用已有 `.build/venvs/windows`；首次运行时，使用显式 `-Python`，或依次探测 PATH 的 `python.exe` 和 `py -0p` 登记的解释器，选择满足版本与位数要求的解释器。不自动下载 Python，也不调用 Microsoft Store 安装别名。
 2. 首次创建独立虚拟环境并检查解释器。整个流程直接调用环境内的 `python.exe`，无需运行 `Activate.ps1`。
 3. 检查 pip 和 `requirements-build.txt`（含 `requirements.txt`）中的锁定版本；版本满足后再执行 `pip check` 检查依赖关系。
 4. 依赖缺失、版本不符或关系冲突时，默认调用 pip 安装锁定依赖；pip 缺失时先通过 Python 自带的 `ensurepip` 补齐。安装后重新检查，仍有错误则中止。依赖已满足时跳过安装；`-SkipInstall` 遇到缺失或冲突只报错。
@@ -70,13 +81,13 @@ winget install --id Python.Python.3.13 --exact
 
 也可从终端使用 `powershell.exe -NoProfile -File .\build-windows.ps1` 或 `pwsh -NoProfile -File .\build-windows.ps1`。如果下载文件被本机策略阻止，先检查脚本来源并按所在设备的执行策略处理；脚本不会修改执行策略。
 
-`-Python` 仅在首次创建虚拟环境时生效；已有环境会继续复用，需要更换解释器时先移走 `.venv-build-windows/`。参数是可执行文件路径或命令名，不能写成 `-Python 'py -3.13'`。可先用 `py -0p` 查看已安装解释器，再传入对应的 `python.exe` 路径。`-Python`、`-FFmpeg` 及 `BAILONG_BUILD_FFMPEG` 中的相对路径均相对于调用脚本时的目录解析；构建完成或失败后恢复原工作目录与脚本修改的环境变量。
+`-Python` 仅在首次创建虚拟环境时生效；已有环境会继续复用，需要更换解释器时先移走 `.build/venvs/windows/`。参数是可执行文件路径或命令名，不能写成 `-Python 'py -3.13'`。可先用 `py -0p` 查看已安装解释器，再传入对应的 `python.exe` 路径。`-Python`、`-FFmpeg` 及 `BAILONG_BUILD_FFMPEG` 中的相对路径均相对于调用脚本时的目录解析；构建完成或失败后恢复原工作目录与脚本修改的环境变量。
 
 维护此脚本时保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 可能将无 BOM 的 UTF-8 脚本按系统代码页解读，导致中文错误或解析失败。脚本兼容两种 PowerShell 不代表支持旧版 Windows；Python、Qt 与 FFmpeg 的系统及架构要求仍需满足。
 
-虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.14/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.build/venvs/windows/`。产物：`dist-windows/build-v0.5.1-opt.22/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.14-windows-x86_64.zip`。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；本分支 Release 使用新构建包，依赖许可一并收集。
+在 x64 解释器下使用 `-Zip`，另生成 `dist-windows/bailong-desktop-pet-v0.5.1-opt.22-windows-x86_64.zip`。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；五平台发布由 GitHub Actions 工作流执行。
 
 `build-windows.ps1` 调用独立的 `work/build_windows_optimized.py`，整理完整目录包。作者原版 `work/build_windows.py` 保留在原路径，继续与 `work/build_release.py` 搭配使用。两套入口并存，自动化入口不调用原发行脚本。
 
@@ -84,7 +95,7 @@ winget install --id Python.Python.3.13 --exact
 
 | 原作步骤 | 本分支的处理 |
 | --- | --- |
-| `python -m pip install --target .build-tools pyinstaller==6.22.3` | 原脚本仍从 `.build-tools` 加载 PyInstaller。PS 自动化入口则在 `.venv-build-windows` 内安装 `requirements-build.txt`；两套流程均需应用依赖 |
+| `python -m pip install --target .build/tools pyinstaller==6.22.3` | 原脚本仍从 `.build/tools` 加载 PyInstaller。PS 自动化入口则在 `.build/venvs/windows` 内安装 `requirements-build.txt`；两套流程均需应用依赖 |
 | `python work/build_windows.py` | 保留作者原版内容，生成 EXE 与运行库；优化版另存为 `work/build_windows_optimized.py`，直接生成含素材和 FFmpeg 的完整目录包 |
 | FFmpeg 放到 `work/video-deps/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe` | 这是旧 ZIP 脚本硬编码的位置；新入口用 `-FFmpeg` 指定，或放到 `tools/ffmpeg.exe`，也可使用默认依赖提供的版本 |
 | 保留 `outputs` 素材 | 仍需要，清单及引用文件必须完整；默认脚本不下载素材 |
@@ -98,11 +109,11 @@ winget install --id Python.Python.3.13 --exact
 
 ```powershell
 & 'C:\Python313\python.exe' work/build_common.py
-& 'C:\Python313\python.exe' -m venv .venv-build-windows
-& '.\.venv-build-windows\Scripts\python.exe' -m pip install -r requirements-build.txt
-& '.\.venv-build-windows\Scripts\python.exe' work/check_build_dependencies.py
-& '.\.venv-build-windows\Scripts\python.exe' -m pip check
-& '.\.venv-build-windows\Scripts\python.exe' work/build_windows_optimized.py --zip
+& 'C:\Python313\python.exe' -m venv .build/venvs/windows
+& '.\.build/venvs/windows\Scripts\python.exe' -m pip install -r requirements-build.txt
+& '.\.build/venvs/windows\Scripts\python.exe' work/check_build_dependencies.py
+& '.\.build/venvs/windows\Scripts\python.exe' -m pip check
+& '.\.build/venvs/windows\Scripts\python.exe' work/build_windows_optimized.py --zip
 # 自备 FFmpeg 时，给最后一步加 --ffmpeg 'C:\tools\ffmpeg.exe'
 ```
 
@@ -113,7 +124,7 @@ winget install --id Python.Python.3.13 --exact
 | 现象 | 处理 |
 | --- | --- |
 | 找不到合适 Python／提示使用 64 位 | `py -0p` 查看解释器，使用 `-Python` 指定路径；可用 `python -c "import sys,struct; print(sys.executable); print(sys.version); print(struct.calcsize('P')*8)"` 核对默认解释器 |
-| 换了 `-Python` 却仍用旧版本 | 参数仅负责创建环境，先将已有 `.venv-build-windows` 移走，再运行脚本；不要从 Mac 复制虚拟环境到 Windows |
+| 换了 `-Python` 却仍用旧版本 | 参数仅负责创建环境，先将已有 `.build/venvs/windows` 移走，再运行脚本；不要从 Mac 复制虚拟环境到 Windows |
 | pip 安装失败／没有匹配的发行包 | 检查当前 Python、位数、网络和软件源是否提供锁定版本的 wheel；脚本会中止，不把失败安装当成成功 |
 | 缺 pip 且 `ensurepip` 不可用 | 使用包含 venv／ensurepip 的完整 Python 发行版；嵌入式 Python 压缩包不等同于完整开发环境 |
 | 依赖安装后 `pip check` 仍失败 | 环境可能混入额外冲突包，保留日志，移走构建 venv 后重建；脚本不强行卸载未知包 |
@@ -126,18 +137,20 @@ winget install --id Python.Python.3.13 --exact
 先安装 Python 3.11～3.13 与 Xcode Command Line Tools（`xcode-select --install`），然后：
 
 ```bash
-PYTHON=python3.11 bash build-macos.sh
+bash build-macos.sh --python python3.13
+# 同时生成完整 ZIP
+bash build-macos.sh --archive
 # 自备 FFmpeg
 bash build-macos.sh --ffmpeg /absolute/path/to/ffmpeg
 # 使用已经安装依赖的环境重新打包
 BUILD_VENV="$PWD/.venv" bash build-macos.sh --skip-install
 ```
 
-虚拟环境默认 `.venv-build-macos/`。产物 `dist-macos/BailongPet.app`，含素材与 FFmpeg，并在资源／Info.plist 更新后进行本地 ad-hoc 签名。没有 Developer ID 签名或公证。Apple Silicon Python 构建 arm64；Intel Python 在 Intel Mac 上构建 x86_64，不自动生成 universal 包。当前只执行过 Apple Silicon 构建。
+虚拟环境默认 `.build/venvs/macos/`。产物 `dist-macos/BailongPet.app`，含素材与 FFmpeg，并在资源／Info.plist 更新后进行本地 ad-hoc 签名。没有 Developer ID 签名或公证。Apple Silicon Python 构建 arm64；Intel Python 在 Intel Mac 上构建 x86_64，不自动生成 universal 包。当前只执行过 Apple Silicon 构建。
 
 ## Linux：三类发行版
 
-三个入口共用 `work/build_linux.sh` 与 `work/build_linux.py`。默认只创建虚拟环境并安装 Python 依赖；加 **`--install-deps`** 才通过 apt／dnf／pacman 安装 XCB、OpenGL、中文字体和编译工具等系统依赖，非 root 使用 sudo。
+三个入口共用 `work/build_linux.sh`、`work/build_shell_common.sh` 与 `work/build_linux.py`；macOS 也复用相同 Bash 依赖流程。默认复用或创建虚拟环境，按需补齐 Python 依赖；加 **`--install-deps`** 才通过 apt／dnf／pacman 安装 XCB、OpenGL、中文字体和编译工具等系统依赖，非 root 使用 sudo。
 
 ```bash
 # Debian / Ubuntu 及衍生版
@@ -163,28 +176,47 @@ PYTHON="$(uv python find 3.13)" bash build-linux-arch.sh
 
 ```bash
 bash build-linux-debian.sh --skip-install
-PYTHON=python3.12 bash build-linux-fedora.sh --ffmpeg /absolute/path/to/ffmpeg
+bash build-linux-fedora.sh --python python3.13 --ffmpeg /absolute/path/to/ffmpeg
+# 生成保留符号链接的完整 tar.gz
+bash build-linux-fedora.sh --archive
 ```
 
-虚拟环境 `.venv-build-linux-<family>/`；产物 `dist-linux/<family>-<architecture>/BailongPet/`。在桌面会话中运行该目录的 `./run.sh`，携带整个目录。`run.sh` 默认 `QT_QPA_PLATFORM=xcb`，面向 X11／XWayland；它不安装 XWayland 服务，不修改系统桌面设置。原生 Wayland 可显式设置 `QT_QPA_PLATFORM=wayland ./run.sh`，窗口位置、置顶、托盘和吸边须单独验收。
+虚拟环境 `.build/venvs/linux-<family>/`；产物 `dist-linux/<family>-<architecture>/BailongPet/`。在桌面会话中运行该目录的 `./run.sh`，携带整个目录。`run.sh` 默认 `QT_QPA_PLATFORM=xcb`，面向 X11／XWayland；它不安装 XWayland 服务，不修改系统桌面设置。原生 Wayland 可显式设置 `QT_QPA_PLATFORM=wayland ./run.sh`，窗口位置、置顶、托盘和吸边须单独验收。
 
 当前生成的是 **PyInstaller 目录包**，不是 deb、rpm、AppImage 或 pacman 安装包。Linux 构建使用目标系统的 glibc 等基础库；应在目标发行版或所支持的最旧兼容环境中构建，不能把一台新系统构建的目录当作通用 Linux 包。固定 PySide6 6.9.2 的官方 wheel 要求 x86_64 glibc 2.28+、aarch64 glibc 2.39+；实际运行下限还受构建系统及其他库影响。
 
-Linux 的全屏自动检测及跟随 Codex 启动未接入；不要把 Windows／macOS 的菜单能力当作 Linux 已实现功能。此轮只增加构建入口，不扩展这些平台功能。现有 Linux 状态文件会写到应用目录，测试产物应放在用户可写目录中。
+Linux 的全屏自动检测及跟随 Codex 启动未接入。Linux 对话、任务目录、运行状态和日志保存在 `$XDG_DATA_HOME/BailongPet`（默认 `~/.local/share/BailongPet`），设置由 QSettings 保存在用户配置目录；不会写入安装目录。旧目录包中的状态文件原地保留。
+
+### Fedora RPM 试装包
+
+```bash
+sudo dnf install rpm-build desktop-file-utils
+bash build-linux-fedora.sh --rpm
+# 依赖已齐全时
+bash build-linux-fedora.sh --skip-install --rpm
+```
+
+RPM 与 Fedora 压缩包放在 `dist-linux/fedora-<architecture>/`，构建中间文件放 `.build/work/rpm/`。RPM 安装应用至 `/opt/bailong-desktop-pet`，命令入口为 `bailong-desktop-pet`，应用菜单显示“白龙桌宠”，使用与托盘同源的待机图标。这是当前 Fedora / glibc 环境的本地试装包，携带固定 Python / Qt 运行库，不作为通用 RHEL 包或 Fedora 官方仓库包。构建脚本不会安装 RPM；可手动 `sudo dnf install ./路径/文件.rpm`，卸载用 `sudo dnf remove bailong-desktop-pet`，用户数据继续保留。
 
 ## 低层 Python 入口
 
-已安装依赖的虚拟环境也可以直接运行对应的 `work/build_windows_optimized.py`、`work/build_macos.py` 或 `work/build_linux.py --family debian`，均支持 `--ffmpeg`，并拒绝在错误的操作系统构建。Windows 入口额外支持 `--zip`。程序入口不变，仍是 `app/pet.py`。
+已安装依赖的虚拟环境也可以直接运行对应的 `work/build_windows_optimized.py`、`work/build_macos.py` 或 `work/build_linux.py --family debian`，均支持 `--ffmpeg`，并拒绝在错误的操作系统构建。Windows 入口支持 `--zip`，macOS / Linux 支持 `--archive`。macOS 压缩包放在 `dist-macos/`，Linux 压缩包放在 `dist-linux/<family>-<architecture>/`，不上传。程序入口不变，仍是 `app/pet.py`。
 
 打包资源内的 `BUILD_INFO.json` 记录分支版本、Python、平台、架构和素材文件数量，不包含本机用户名或绝对路径。仓库根目录旧 `BUILD_INFO.json` 与 `RELEASE_NOTES.md` 是作者 v0.5.1 的历史记录，不代表这次构建。
 
 ## 包体积
 
+opt.22 Linux 短音效改用系统 `paplay`，不再打包 QtMultimedia、其 FFmpeg 后端和 QML/Quick 依赖；本机 Fedora x86_64 目录为 317.75 MiB，原始素材、GTK 主题插件和输入法插件保留。Debian/Ubuntu、Fedora 安装 `pulseaudio-utils`，Arch 安装 `libpulse`，均提供 `/usr/bin/paplay`。
+
+opt.21 Fedora x86_64 目录包从 443.88 MiB 降至 358.63 MiB：原始素材保持 146.77 MiB，通用 FFmpeg 76.13 MiB 换为本机编译的精简版本 1.84 MiB，其余减少来自 PDF、虚拟键盘和 AVIF 依赖。Qt 音效后端实际依赖 QML/Quick，继续保留；IBus/Compose、XCB/Wayland 和桌面主题插件也保留。
+
+Linux 优先复用 `.build/ffmpeg/linux-<architecture>/bin/ffmpeg` 本机精简解码器（显式 `--ffmpeg`、环境变量和 `tools/ffmpeg` 优先），没有时仍回退到 imageio-ffmpeg。需要首次编译时使用上文的 `work/build_minimal_ffmpeg.py`，不会自动安装编译器或 NASM；Windows/macOS 选择逻辑不变。
+
 opt.10 的 FFmpeg 在产物中只保留一份：Windows 使用 `tools/ffmpeg.exe`，macOS／Linux 通过相对符号链接复用 PyInstaller 收集的文件。移动 Linux 目录包时保留符号链接。
 
 Windows 使用 `work/hooks/windows/hook-PySide6.QtGui.py`，在依赖分析前排除 PDF 图片和 Qt 虚拟键盘插件，避免为它们收集 Qt PDF、QML／Quick 库；另排除 Pillow AVIF 解码器。本应用使用 Widgets、系统输入法、WebM／WebP 动画和 WAV 音效。opt.13 另通过 `hook-PySide6.py` 排除软件 OpenGL `opengl32sw.dll`，保留 Qt 多媒体后端及原始素材。
 
-本机 opt.9 目录为 460.14 MiB，其中重复 FFmpeg 83.58 MiB，上述 Qt 插件依赖链 19.79 MiB，Pillow AVIF 扩展 7.47 MiB。本机 opt.11 目录实测 349.31 MiB。opt.13 将 FFmpeg 从 83.58 MiB 换为 2.00 MiB，并移除约 19.68 MiB 软件 OpenGL；随包补齐依赖许可。最终大小见 Release。
+本机 opt.9 目录为 460.14 MiB，其中重复 FFmpeg 83.58 MiB，上述 Qt 插件依赖链 19.79 MiB，Pillow AVIF 扩展 7.47 MiB。本机 opt.11 目录实测 349.31 MiB。opt.13 将 FFmpeg 从 83.58 MiB 换为 2.00 MiB，并移除约 19.68 MiB 软件 OpenGL；随包补齐依赖许可。最终大小以本地构建输出为准。
 
 解码器仅一份、相对链接目标、插件过滤和构建入口接线已用本地脚本检查；这些新增验证脚本不随源码追踪。新包运行验收包括动画透明边缘、WebP 后备路径、中文输入、点击音效和系统主题。
 
@@ -194,7 +226,7 @@ Windows x86_64 解码器随仓库追踪：`tools/ffmpeg.exe`、`tools/ffmpeg-bui
 
 精简版固定为 FFmpeg 7.1.5 + libvpx 1.17.0，包含 WebM / VP9 透明解码、缩放、帧率调整、RGBA 输出和本地文件／管道输入输出。其他格式转码、网络协议与音频处理未编译；点击音效仍由原平台音效路径播放。
 
-重编译需要 Linux／WSL 或 macOS、Python 3.12+、C 编译器、make、pkg-config、Perl；x86_64 还需要 NASM。Windows 目标另需 MinGW-w64 x86_64 工具链。编译脚本下载并校验固定源码，产物放在 `.build-ffmpeg/`，不安装系统工具。
+重编译需要 Linux／WSL 或 macOS、Python 3.12+、C 编译器、make、pkg-config、Perl；x86_64 还需要 NASM。Windows 目标另需 MinGW-w64 x86_64 工具链。编译脚本下载固定版本源码，产物放在 `.build/ffmpeg/`，不安装系统工具。
 
 ```bash
 # WSL：生成 Windows x86_64 解码器
@@ -204,20 +236,21 @@ python3 work/build_minimal_ffmpeg.py --target windows-x86_64
 python3 work/build_minimal_ffmpeg.py
 ```
 
-Windows 输出位于 `.build-ffmpeg/windows-x86_64/bin/`。更新仓库解码器时，将其中 `ffmpeg.exe`、`ffmpeg-build.json` 与 `ffmpeg-licenses/` 一起复制到 `tools/`，再运行 Windows 打包脚本。macOS arm64 输出为 `.build-ffmpeg/darwin-arm64/bin/ffmpeg`；Linux x86_64 输出为 `.build-ffmpeg/linux-x86_64/bin/ffmpeg`，通过 `--ffmpeg` 传给对应打包入口。
+Windows 输出位于 `.build/ffmpeg/windows-x86_64/bin/`。更新仓库解码器时，将其中 `ffmpeg.exe`、`ffmpeg-build.json` 与 `ffmpeg-licenses/` 一起复制到 `tools/`，再运行 Windows 打包脚本。macOS arm64 输出为 `.build/ffmpeg/darwin-arm64/bin/ffmpeg`；Linux x86_64 输出为 `.build/ffmpeg/linux-x86_64/bin/ffmpeg`，通过 `--ffmpeg` 传给对应打包入口。
 
 ## 自动构建其他平台
 
-GitHub Actions 的 **Build macOS and Linux packages** 工作流接受 Release 标签，从该版本 Windows 包提取原始动画，再分别编译和打包：
+GitHub Actions 的 **Build and release five platform packages** 工作流从原作者 v0.5.1 完整包提取原始动画，再分别编译和打包：
 
 | 产物 | 构建环境 |
 | --- | --- |
+| Windows x86_64 | Windows GitHub runner |
 | macOS arm64 | macOS 15 Apple Silicon |
 | Linux Debian / Ubuntu x86_64 | Debian 12 |
-| Linux Fedora x86_64 | Fedora 45 |
+| Linux Fedora x86_64 | Fedora 44 |
 | Linux Arch x86_64 | Arch Linux |
 
-工作流只编译、打包和上传程序压缩包。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。
+五个平台构建成功后，工作流上传完整运行包到输入标签对应的私有 Release；文档包含各平台直接下载链接、更新记录和构建说明。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。
 
 ## 性能设置
 

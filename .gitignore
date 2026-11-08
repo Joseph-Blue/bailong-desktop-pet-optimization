@@ -3,6 +3,7 @@
 .DS_Store
 dist-macos/
 dist-linux/
+dist-windows/
 tools/*
 !tools/ffmpeg.exe
 !tools/ffmpeg-build.json

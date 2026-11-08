@@ -17,18 +17,19 @@ class DownloadRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def main():
-    repository = os.environ['GITHUB_REPOSITORY']
-    tag = os.environ['RELEASE_TAG']
+    repository = os.environ.get('ASSET_REPOSITORY', 'jingh12312-rgb/bailong-desktop-pet')
+    tag = os.environ.get('ASSET_RELEASE_TAG', 'v0.5.1')
     headers = {'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
                'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
     request = urllib.request.Request(f'https://api.github.com/repos/{repository}/releases/tags/{tag}', headers=headers)
     with urllib.request.urlopen(request, timeout=60) as response:
         release = json.load(response)
-    asset = next(item for item in release['assets'] if item['name'].endswith('-windows-x86_64.zip'))
+    asset = next(item for item in release['assets']
+                 if item['name'].endswith(('-windows-x64-webm.zip', '-windows-x86_64.zip')))
     headers['Accept'] = 'application/octet-stream'
     request = urllib.request.Request(asset['url'], headers=headers)
-    work = ROOT / '.build-release'
-    work.mkdir(exist_ok=True)
+    work = ROOT / '.build/downloads'
+    work.mkdir(parents=True, exist_ok=True)
     archive = work / asset['name']
     import shutil
     with urllib.request.build_opener(DownloadRedirect()).open(request, timeout=120) as response, archive.open('wb') as out:

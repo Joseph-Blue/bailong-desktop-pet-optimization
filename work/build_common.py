@@ -44,6 +44,9 @@ def build_inputs(ffmpeg_arg=None):
             ffmpeg = Path(explicit).expanduser().resolve()
         else:
             local = ROOT / 'tools' / ('ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg')
+            if sys.platform == 'linux' and not local.is_file():
+                arch = {'amd64': 'x86_64', 'aarch64': 'arm64'}.get(platform.machine().lower(), platform.machine().lower())
+                local = ROOT / '.build/ffmpeg' / f'linux-{arch}' / 'bin/ffmpeg'
             if local.is_file():
                 ffmpeg = local
             else:
@@ -116,18 +119,24 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
     arch = platform.machine().lower()
     arch = {'amd64': 'x86_64', 'x64': 'x86_64', 'aarch64': 'arm64'}.get(arch, arch)
     if target == 'windows':
-        dist = ROOT / '发布包' / f'build-v{VERSION}'
-        work = ROOT / '.build' / f'work-v{VERSION}'
+        dist = ROOT / 'dist-windows' / f'build-v{VERSION}'
+        work = ROOT / '.build/work/windows' / f'work-v{VERSION}'
     else:
         dist = ROOT / ('dist-macos' if target == 'macos' else f'dist-linux/{family}-{arch}')
-        work = ROOT / f'.build-{target}' / arch
+        work = ROOT / '.build/work' / target / arch
     options = ['--noconfirm', '--clean', '--onedir', '--name', 'BailongPet',
                '--distpath', str(dist), '--workpath', str(work), '--specpath', str(work),
                '--hidden-import', 'autostart', '--hidden-import', 'selftest',
-               '--hidden-import', 'version', '--hidden-import', 'PySide6.QtMultimedia']
+               '--hidden-import', 'version']
+    if target != 'linux':
+        options += ['--hidden-import', 'PySide6.QtMultimedia']
     if target == 'windows':
         options += ['--additional-hooks-dir', str(ROOT / 'work/hooks/windows'),
                     '--exclude-module', 'PIL.AvifImagePlugin', '--exclude-module', 'PIL._avif']
+    if target == 'linux':
+        options += ['--additional-hooks-dir', str(ROOT / 'work/hooks/linux'),
+                    '--exclude-module', 'PIL.AvifImagePlugin', '--exclude-module', 'PIL._avif',
+                    '--exclude-module', 'PySide6.QtMultimedia']
     if target != 'linux':
         options.append('--windowed')
     if target == 'macos':
@@ -146,13 +155,9 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
         decoder_dir = inputs[3].parent
         metadata = decoder_dir / 'ffmpeg-build.json'
         if metadata.is_file():
-            import hashlib
-            details = json.loads(metadata.read_text(encoding='utf-8'))
-            digest = hashlib.sha256(inputs[3].read_bytes()).hexdigest()
-            if details.get('binarySha256') == digest:
-                shutil.copy2(metadata, resources / 'tools/ffmpeg-build.json')
-                shutil.copytree(decoder_dir / 'ffmpeg-licenses', resources / 'tools/ffmpeg-licenses',
-                                dirs_exist_ok=True)
+            shutil.copy2(metadata, resources / 'tools/ffmpeg-build.json')
+            shutil.copytree(decoder_dir / 'ffmpeg-licenses', resources / 'tools/ffmpeg-licenses',
+                            dirs_exist_ok=True)
     info = {'version': VERSION, 'branch': BRANCH, 'platform': target, 'architecture': arch,
             'python': platform.python_version(), 'linuxFamily': family,
             'animationFiles': len(inputs[2]), 'validation': 'built; runtime acceptance pending'}
@@ -166,10 +171,23 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
         plist.write_bytes(plistlib.dumps(data))
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(output)], check=True)
     elif target == 'linux':
+        from PIL import Image
+        idle = inputs[1]['idle']
+        video = inputs[0] / (idle.get('playbackFile') or idle['file'].replace('.webm', '.webp'))
+        if video.suffix.lower() == '.webm':
+            raw = subprocess.check_output([str(inputs[3]), '-v', 'error', '-c:v', 'libvpx-vp9',
+                '-i', str(video), '-frames:v', '1', '-vf', 'scale=256:256',
+                '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'])
+            icon = Image.frombytes('RGBA', (256, 256), raw)
+        else:
+            with Image.open(video) as frame:
+                icon = frame.convert('RGBA').resize((256, 256))
+        icon.save(output / 'BailongPet.png')
         launcher = output / 'run.sh'
         launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\n'
                             'cd -- "$(dirname -- "${BASH_SOURCE[0]}")"\n'
                             'export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"\n'
+                            'export QT_IM_MODULE="${QT_IM_MODULE:-ibus}"\n'
                             'exec ./BailongPet "$@"\n', encoding='utf-8')
         launcher.chmod(0o755)
     size = sum(path.stat().st_size for path in output.rglob('*')

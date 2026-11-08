@@ -28,7 +28,7 @@
 | `outputs/`、`work/video-deps/` | 不追踪；素材在构建时准备 |
 | `tools/ffmpeg.exe`、版本记录与许可 | 按用户要求追踪 Windows x86_64 精简解码器 |
 
-忽略规则不删除本地文件，也不改写已有 Git 历史。视觉校验产物存放在 `.build-ui-review/`，已被 `.build*/` 覆盖。
+忽略规则不删除本地文件，也不改写已有 Git 历史。视觉校验产物存放在 `.build/ui-review/`，已被 `.build*/` 覆盖。
 
 ## 定向检查
 
@@ -36,7 +36,7 @@
 
 ```bash
 PYTHONPATH=app .venv/bin/python -m unittest test_chat test_session_reuse
-for script in build-macos.sh build-linux-*.sh work/build_linux.sh; do bash -n "$script" || break; done
+for script in build-macos.sh build-linux-*.sh work/build_linux.sh work/build_shell_common.sh; do bash -n "$script" || break; done
 ```
 
 Qt 组件检查可设置 `QT_QPA_PLATFORM=offscreen`。不以 offscreen 检查替代窗口、置顶、透明度和真实对话验收；不自动发送 Codex 请求。

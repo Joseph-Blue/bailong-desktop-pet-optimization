@@ -21,8 +21,20 @@ def configure_window(window):
     window.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.CustomizeWindowHint |
                           Qt.WindowType.WindowTitleHint | Qt.WindowType.WindowSystemMenuHint |
                           Qt.WindowType.WindowCloseButtonHint)
+    configure_linux_dialog(window)
     window.setFont(readable_font())
     QShortcut(QKeySequence(Qt.Key.Key_Escape), window, activated=window.close)
+
+
+def configure_linux_dialog(window):
+    if not sys.platform.startswith('linux'):
+        return
+    flags = window.windowFlags()
+    flags &= ~(Qt.WindowType.WindowType_Mask | Qt.WindowType.WindowMaximizeButtonHint |
+               Qt.WindowType.WindowContextHelpButtonHint)
+    window.setWindowFlags(flags | Qt.WindowType.Window | Qt.WindowType.CustomizeWindowHint |
+                          Qt.WindowType.WindowTitleHint | Qt.WindowType.WindowSystemMenuHint |
+                          Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowCloseButtonHint)
 
 
 class Columns(QWidget):
