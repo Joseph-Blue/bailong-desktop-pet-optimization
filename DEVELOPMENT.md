@@ -4,6 +4,7 @@
 
 - 构建、依赖和实机验证统一见 [BUILDING.md](BUILDING.md)。Windows 使用 PowerShell 5.1／7+；macOS 与 Linux 使用 Bash。
 - 运行入口 `app/pet.py`，资源定位在 `app/platform_support.py`；有限预加载在 `app/frame_buffer.py`，FFmpeg 管道在 `app/video_frames.py`。
+- 加载路径：当前动作首批帧就绪后开始播放，解码线程按缓冲容量继续补帧；启动与动作切换不再等待整段动画解码完成，加载等待大幅缩短。整段预加载为可选项，默认关闭。
 - `work/build_common.py` 共用素材清单、FFmpeg 检查和目录整理；优化入口为 `work/build_windows_optimized.py`、`work/build_macos.py` 和 `work/build_linux.py`，指定目标系统及其打包选项，拒绝交叉编译。
 - Windows 自动化入口先通过 `work/check_build_dependencies.py` 检查锁定包，再执行 `pip check`；仅缺失或冲突时安装。`-Zip`／`--zip` 从新构建目录生成本地 ZIP，取代旧发行脚本在当前流程中的压缩职责。
 - 版本来源 `app/version.py`，同步维护 `VERSION.txt`、README、BUILDING 和 CHANGELOG。
