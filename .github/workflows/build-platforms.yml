@@ -1,4 +1,4 @@
-name: Build and release five platform packages
+name: Build and release Windows and macOS
 on:
   workflow_dispatch:
     inputs:
@@ -13,9 +13,6 @@ on:
         description: Build macOS arm64
         type: boolean
         default: true
-      linux_families:
-        description: Linux families as a JSON array
-        default: '["debian","fedora","arch"]'
 permissions:
   contents: read
 env:
@@ -73,66 +70,9 @@ jobs:
         with:
           name: macos-arm64
           path: dist-macos/*.zip
-  linux:
-    if: ${{ !inputs.artifact_run_id }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        family: ${{ fromJSON(inputs.linux_families) }}
-    container: ${{ matrix.family == 'debian' && 'python:3.13-slim-bookworm' || matrix.family == 'fedora' && 'fedora:44' || 'archlinux:base' }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Install build tools and desktop libraries
-        env:
-          FAMILY: ${{ matrix.family }}
-        run: |
-          case "$FAMILY" in
-            debian)
-              apt-get update
-              apt-get install -y git build-essential binutils pkg-config nasm perl unzip pulseaudio-utils libgl1 libegl1 libfontconfig1 libdbus-1-3 libx11-xcb1 libxrender1 libxext6 libsm6 libice6 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxkbcommon-x11-0 fonts-noto-cjk
-              ;;
-            fedora)
-              dnf install -y git uv gcc gcc-c++ make binutils pkgconf-pkg-config nasm perl unzip tar xz pulseaudio-utils libglvnd-glx libglvnd-egl fontconfig dbus-libs libX11-xcb libXrender libXext libSM libICE libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 google-noto-sans-cjk-fonts
-              ;;
-            arch)
-              pacman -Syu --noconfirm git uv base-devel binutils pkgconf nasm perl unzip libpulse libglvnd fontconfig dbus libx11 libxrender libxext libsm libice libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 noto-fonts-cjk
-              ;;
-          esac
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.release_tag }}
-      - name: Select Python 3.13
-        if: matrix.family != 'debian'
-        run: |
-          uv python install 3.13
-          uv venv --python 3.13 --seed .build/venvs/ci-bootstrap
-      - name: Prepare repaired assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build/venvs/ci-bootstrap/bin/python3.13' }}
-        run: '"$PYTHON" work/fetch_release_assets.py'
-      - name: Build decoder and application
-        env:
-          PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build/venvs/ci-bootstrap/bin/python3.13' }}
-          FAMILY: ${{ matrix.family }}
-        run: |
-          "$PYTHON" -m venv .build/venvs/ci
-          .build/venvs/ci/bin/python -m pip install -r requirements-build.txt
-          .build/venvs/ci/bin/python work/build_minimal_ffmpeg.py
-          .build/venvs/ci/bin/python work/build_linux.py --family "$FAMILY" --ffmpeg .build/ffmpeg/linux-x86_64/bin/ffmpeg
-          .build/venvs/ci/bin/python work/archive_platform.py --platform linux --family "$FAMILY" --directory "dist-linux/$FAMILY-x86_64/BailongPet"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-${{ matrix.family }}-x86_64
-          path: dist-linux/*/*.tar.gz
-          if-no-files-found: error
   publish:
-    needs: [windows, macos, linux]
-    if: ${{ always() && !cancelled() && (inputs.artifact_run_id != '' || (needs.windows.result == 'success' && needs.macos.result == 'success' && needs.linux.result == 'success')) }}
+    needs: [windows, macos]
+    if: ${{ always() && !cancelled() && (inputs.artifact_run_id != '' || needs.windows.result == 'success' || needs.macos.result == 'success') }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -142,9 +82,17 @@ jobs:
         with:
           ref: ${{ inputs.release_tag }}
       - uses: actions/download-artifact@v4
+        if: ${{ needs.windows.result == 'success' || inputs.artifact_run_id != '' }}
         with:
+          name: windows-x86_64
           path: packages
-          merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
+      - uses: actions/download-artifact@v4
+        if: ${{ needs.macos.result == 'success' || (inputs.artifact_run_id != '' && inputs.build_macos) }}
+        with:
+          name: macos-arm64
+          path: packages
           github-token: ${{ github.token }}
           run-id: ${{ inputs.artifact_run_id || github.run_id }}
       - name: Publish complete packages
@@ -154,13 +102,24 @@ jobs:
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
           mkdir -p .build
-          python - <<'PY'
-          import os
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG · Windows / macOS" --notes '构建产物正在上传。'
+          fi
+          mapfile -d '' package_files < <(find packages -type f \( -name "bailong-desktop-pet-${RELEASE_TAG}-windows-x86_64.zip" -o -name "bailong-desktop-pet-${RELEASE_TAG}-macos-arm64.zip" \) -print0)
+          gh release upload "$RELEASE_TAG" "${package_files[@]}" --clobber
+          gh release view "$RELEASE_TAG" --json assets > .build/release-assets.json
+          python - <<'PYNOTES'
+          import json, os
           from pathlib import Path
+          tag, repo = os.environ['RELEASE_TAG'], os.environ['GH_REPO']
+          assets = {a['name']: a['url'] for a in json.loads(Path('.build/release-assets.json').read_text())['assets']}
+          rows = []
+          for platform, suffix in [('Windows x86_64', 'windows-x86_64'), ('macOS Apple Silicon arm64', 'macos-arm64')]:
+              name = f'bailong-desktop-pet-{tag}-{suffix}.zip'
+              if name in assets:
+                  rows.append(f'| {platform} | [下载 ZIP]({assets[name]}) |')
           text = Path('work/platform_release_notes.md').read_text(encoding='utf-8')
-          text = text.replace('{{TAG}}', os.environ['RELEASE_TAG'])
-          text = text.replace('{{REPO}}', os.environ['GH_REPO'])
+          text = text.replace('{{TAG}}', tag).replace('{{REPO}}', repo).replace('{{DOWNLOAD_ROWS}}', '\n'.join(rows))
           Path('.build/release-notes.md').write_text(text, encoding='utf-8')
-          PY
-          mapfile -d '' package_files < <(find packages -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print0)
-          gh release create "$RELEASE_TAG" "${package_files[@]}" --verify-tag --title "$RELEASE_TAG · Windows / macOS / Linux" --notes-file .build/release-notes.md
+          PYNOTES
+          gh release edit "$RELEASE_TAG" --notes-file .build/release-notes.md --latest

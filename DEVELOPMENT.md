@@ -1,54 +1,54 @@
 # 开发说明
 
-本分支为作者 v0.5.1 的 Python／PySide6／FFmpeg 优化分支，作者基线不随 opt 迭代改变。
+本仓库整理面向原作者 v0.5.1 的优化和修复；作者基线为 `b102e73`，版本只调整 `opt` 后缀。当前交付 Windows x86_64 与 macOS arm64，Linux 支援暂停。
 
-- 构建、依赖和实机验证统一见 [BUILDING.md](BUILDING.md)。Windows 使用 PowerShell 5.1／7+；macOS 与 Linux 使用 Bash。
-- 运行入口 `app/pet.py`，资源定位在 `app/platform_support.py`；有限预加载在 `app/frame_buffer.py`，FFmpeg 管道在 `app/video_frames.py`。
-- 加载路径：当前动作首批帧就绪后开始播放，解码线程按缓冲容量继续补帧；启动与动作切换不再等待整段动画解码完成，加载等待大幅缩短。整段预加载为可选项，默认关闭。
-- `work/fetch_release_assets.py` 统一准备四段修复素材包；所有应用构建入口（含作者原 Windows 构建及发行流程）接入，原版清单自动切换为修复包清单，已有动画文件保留。独立素材包由 `work/package_assets.py` 生成，来源见 ASSETS.md。
-- `work/build_common.py` 共用素材清单、FFmpeg 检查和目录整理；优化入口为 `work/build_windows_optimized.py`、`work/build_macos.py` 和 `work/build_linux.py`，指定目标系统及其打包选项，拒绝交叉编译。macOS 默认自动编译并复用精简 FFmpeg；素材下载共用大小、百分比和网速显示。
-- Windows 自动化入口先通过 `work/check_build_dependencies.py` 检查锁定包，再执行 `pip check`；仅缺失或冲突时安装。`-Zip`／`--zip` 从新构建目录生成本地 ZIP，取代旧发行脚本在当前流程中的压缩职责。
-- 应用图标源为 `app/icons/repaired-idle.png`（修复 idle 第一帧），Windows/macOS 构建通过 `work/build_icons.py` 生成 ICO/ICNS；动画修复备选包按 `docs/修复素材备选包.md` 独立封装，所有脚本默认使用修复包。
-- 版本来源 `app/version.py`，同步维护 `VERSION.txt`、README、BUILDING 和 CHANGELOG。
-- UI 修改必须使用 Qt 官方 `qt-ui-design` skill，具体规范见 [AGENTS.md](AGENTS.md)。该 skill 不参与应用运行和构建。
-- 私人仓库追踪源码、文档和指定的 Windows 精简 FFmpeg；应用包通过 Release 交付。本机素材、构建环境、缓存与用户历史不入 Git。
-- `work/build_windows.py` 保留作者构建流程并接入素材自动下载，配合原发行脚本 `work/build_release.py` 使用；后者维护当前运行模块清单。根目录旧 `BUILD_INFO.json`／`RELEASE_NOTES.md` 保留作者发行记录。PS 自动化入口使用独立优化版，不调用原发行脚本。
-- 跨平台分支只修改本仓库，不修改相邻 Swift 工程或历史 Python macOS 移植工程。
+## 代码与入口
 
-## 文件追踪范围
-
-| 内容 | 处理方式 |
+| 位置 | 职责 |
 | --- | --- |
-| `app/` 运行源码、依赖清单 | 追踪，运行和构建需要 |
-| 作者原有测试与 `app/selftest.py` | 继续追踪，保留原有检查能力 |
-| `build-windows.ps1`、各平台构建入口、`work/` 构建模块和 hook | 追踪，原 Windows 脚本与优化版并存 |
-| `app/sounds/` 音效与许可说明 | 保留作者原有文件 |
-| README、构建／开发／优化说明、CHANGELOG、版本与项目约定 | 追踪 |
-| 作者原有 `BUILD_INFO.json`、`RELEASE_NOTES.md`、安装说明 | 保留历史发行记录 |
-| 本分支新增的 11 个测试文件 | 取消追踪，保留本地并按文件名忽略 |
-| `.build*/`、虚拟环境、程序包、视觉检查截图、缓存、日志、用户数据 | 不追踪 |
-| `outputs/`、`work/video-deps/` | 不追踪；素材在构建时准备 |
-| `tools/ffmpeg.exe`、版本记录与许可 | 按用户要求追踪 Windows x86_64 精简解码器 |
+| `app/pet.py` | 桌宠、动作、气泡和托盘 |
+| `app/frame_buffer.py`、`app/video_frames.py` | 当前动作有限预加载与透明解码 |
+| `app/performance_preferences.py`、`app/performance_settings.py` | 性能默认值、持久化和即时设置 |
+| `app/diagnostics.py`、`app/performance_metrics.py` | 性能统计与平台资源采样 |
+| `app/chat_ui.py`、`app/task_activity.py`、`app/desktop_task_sync.py` | 自有会话、外部只读观察与临时工具状态 |
+| `app/platform_support.py` | 平台窗口、资源与用户数据路径 |
+| `build-windows.ps1`、`work/build_windows_optimized.py` | Windows 完整包与 ZIP |
+| `build-macos.sh`、`work/build_macos.py` | macOS 本机架构应用与 ZIP |
+| `work/build_common.py` | 两平台素材、运行库、图标与许可整理 |
+| `work/build_minimal_ffmpeg.py` | 精简解码器编译；保留 WSL 编译 Windows 解码器的工具用途 |
+| `work/fetch_release_assets.py`、`work/package_assets.py` | 默认修复素材的下载与封装 |
 
-忽略规则不删除本地文件，也不改写已有 Git 历史。视觉校验产物存放在 `.build/ui-review/`，已被 `.build*/` 覆盖。
+macOS 默认复用 `.build/ffmpeg/darwin-<架构>/bin/ffmpeg`，缺失时自动编译；Windows 默认使用 `tools/ffmpeg.exe`。显式 FFmpeg 参数优先。具体依赖与命令见 [BUILDING.md](BUILDING.md)。
 
-## 定向检查
+## 协作与追踪
 
-使用构建虚拟环境的 Python，在仓库根目录按改动执行。例如：
+- 原作者目录及相邻 Swift／旧 Python 移植工程只作只读参考，按需移植具体逻辑，不整仓复制。
+- 原 Windows 入口 `work/build_windows.py`、`work/build_release.py` 保留；PowerShell 使用独立优化入口。
+- Linux 三阵营脚本、RPM 工具和 CI 任务已移除。运行源码中的既有平台分支保留，不作为当前支持或发布承诺。
+- 不新增猜测性兼容层或静默吞错。Qt 界面沿用系统字体、原生控件与平台字号；不再要求安装 `qt-ui-design` skill。
+- 版本来源为 `app/version.py`，同步 `VERSION.txt`、当前文档与工作流默认标签。
+- 本地提交、推送和发布按当次授权执行。CI 允许两平台分批上传，不用一个平台的失败阻塞另一个已有产物。
 
-```bash
-PYTHONPATH=app .venv/bin/python -m unittest test_chat test_session_reuse
-for script in build-macos.sh build-linux-*.sh work/build_linux.sh work/build_shell_common.sh; do bash -n "$script" || break; done
-```
+| 内容 | Git 处理 |
+| --- | --- |
+| 应用源码、构建脚本、依赖清单、我们维护的说明 | 追踪 |
+| 作者原有测试、音效、来源和许可 | 保留；不自动执行测试或自检 |
+| `app/icons/repaired-idle.png` | 用户指定的构建图标，追踪 |
+| `tools/ffmpeg.exe`、来源记录与许可 | 用户指定的 Windows 精简解码器，追踪 |
+| 原作者 `BUILD_INFO.json`、`RELEASE_NOTES.md`、原始安装说明 | 保留原样，作为作者发行记录 |
+| 动画、`.build*/`、`dist-*`、虚拟环境、缓存、用户数据、本地验证脚本 | 不追踪；动画通过独立素材 Release 提供 |
 
-Qt 组件检查可设置 `QT_QPA_PLATFORM=offscreen`。不以 offscreen 检查替代窗口、置顶、透明度和真实对话验收；不自动发送 Codex 请求。
+## 检查与验收
 
-本分支新增的构建、性能和界面验证脚本只保留在本机，不作为仓库使用或构建的前置条件。后续临时检查同样放入忽略目录。
+代码修改只做必要语法、静态与差异检查；构建属于当前授权时再执行。不自动运行 SHA-256、测试、自检、冒烟、截图或视觉流程。
 
-2026-11-08：opt.9 的性能默认值、设置持久化、帧率降采样、VP9 透明度、整段预加载与取消切换测试通过；Windows 已读取真实系统已提交内存计数。两个窗口以离屏渲染检查浅色／深色、150% 缩放、16 pt 大字体、窄窗口分栏切换及仅关闭按钮标志。Windows 原生标题栏外观、macOS／Linux 桌面窗口行为仍需实机验收。
+构建成功与实机验收分别记录。历史 opt 版本的检查结果见 [CHANGELOG.md](CHANGELOG.md)，不作为当前版本已验收的依据。文档修改只检查格式和本地链接。
 
-opt.9 布局修正：使用长 CPU／GPU 名称和 13 个桌面进程验证等宽双栏、窄窗口排列与复制全文；路径链接指向所在目录。Windows PowerShell 5.1／7 的解释器失败路径显示 winget 手动安装命令，测试不执行安装。
+## 文档分工
 
-opt.10：构建瘦身规则见 `work/hooks/windows/` 和 `work/build_common.py`。增加界面或素材格式时复核插件排除清单。保留 PyInstaller 上游 Qt 依赖收集逻辑，不在打包后按 DLL 名称批量删除运行库。
-
-opt.13：35 段动画完整 RGBA 输出与原 FFmpeg 逐字节一致，Windows 冻结 EXE 离线自检通过；新增 macOS arm64 和三类 Linux x86_64 自动构建。
+- [README](README.md)：当前交付范围、下载与快速入口。
+- [改动对照](docs/原作者版本改动对照.md)：只对照作者 v0.5.1 的最终改动。
+- [BUILDING](BUILDING.md)：Windows／macOS 的构建、素材和发布。
+- [MAC适配说明](MAC适配说明.md)：macOS 平台差异与验收边界。
+- [ASSETS](ASSETS.md)、[修复素材说明](docs/修复素材备选包.md)：来源、替换范围与参数。
+- [CHANGELOG](CHANGELOG.md)：保留历史迭代，当前支持范围以 README 为准。

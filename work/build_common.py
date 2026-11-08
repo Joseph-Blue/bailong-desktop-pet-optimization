@@ -44,9 +44,6 @@ def build_inputs(ffmpeg_arg=None):
                 subprocess.run([sys.executable, str(ROOT / 'work/build_minimal_ffmpeg.py')], check=True)
         else:
             local = ROOT / 'tools' / ('ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg')
-            if sys.platform == 'linux' and not local.is_file():
-                arch = {'amd64': 'x86_64', 'aarch64': 'arm64'}.get(platform.machine().lower(), platform.machine().lower())
-                local = ROOT / '.build/ffmpeg' / f'linux-{arch}' / 'bin/ffmpeg'
             if local.is_file():
                 ffmpeg = local
             else:
@@ -73,8 +70,11 @@ def copy_resources(destination, inputs):
         shutil.copy2(assets / relative, output)
     (target / '素材清单.json').write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
     shutil.copytree(ROOT / 'app/sounds', destination / 'app/sounds', dirs_exist_ok=True)
-    for name in ('README.md', 'CHANGELOG.md', 'ASSETS.md', 'BUILDING.md', '优化说明.md'):
+    for name in ('README.md', 'CHANGELOG.md', 'ASSETS.md', 'BUILDING.md', 'DEVELOPMENT.md', 'MAC适配说明.md', '优化说明.md'):
         shutil.copy2(ROOT / name, destination / name)
+    (destination / 'docs').mkdir(exist_ok=True)
+    for name in ('原作者版本改动对照.md', '修复素材备选包.md'):
+        shutil.copy2(ROOT / 'docs' / name, destination / 'docs' / name)
     (destination / 'VERSION.txt').write_text(VERSION + '\n', encoding='utf-8')
     licenses = destination / 'licenses'
     licenses.mkdir(exist_ok=True)
@@ -110,8 +110,8 @@ def place_ffmpeg(output, target, source):
         bundled.symlink_to(os.path.relpath(collected, bundled.parent))
 
 
-def build_desktop(target, family=None, ffmpeg_arg=None):
-    expected = {'windows': 'win32', 'linux': 'linux', 'macos': 'darwin'}[target]
+def build_desktop(target, ffmpeg_arg=None):
+    expected = {'windows': 'win32', 'macos': 'darwin'}[target]
     if sys.platform != expected:
         raise SystemExit(f'{target} 包必须在对应系统构建，不支持交叉编译。')
     check_python()
@@ -122,25 +122,19 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
         dist = ROOT / 'dist-windows' / f'build-v{VERSION}'
         work = ROOT / '.build/work/windows' / f'work-v{VERSION}'
     else:
-        dist = ROOT / ('dist-macos' if target == 'macos' else f'dist-linux/{family}-{arch}')
+        dist = ROOT / 'dist-macos'
         work = ROOT / '.build/work' / target / arch
     options = ['--noconfirm', '--clean', '--onedir', '--name', 'BailongPet',
                '--distpath', str(dist), '--workpath', str(work), '--specpath', str(work),
                '--hidden-import', 'autostart', '--hidden-import', 'selftest',
                '--hidden-import', 'version']
-    if target != 'linux':
-        options += ['--hidden-import', 'PySide6.QtMultimedia']
+    options += ['--hidden-import', 'PySide6.QtMultimedia']
     if target == 'windows':
         options += ['--additional-hooks-dir', str(ROOT / 'work/hooks/windows'),
                     '--exclude-module', 'PIL.AvifImagePlugin', '--exclude-module', 'PIL._avif']
-    if target == 'linux':
-        options += ['--additional-hooks-dir', str(ROOT / 'work/hooks/linux'),
-                    '--exclude-module', 'PIL.AvifImagePlugin', '--exclude-module', 'PIL._avif',
-                    '--exclude-module', 'PySide6.QtMultimedia']
-    if target != 'linux':
-        options.append('--windowed')
-        from build_icons import build_icon
-        options += ['--icon', str(build_icon(target))]
+    options.append('--windowed')
+    from build_icons import build_icon
+    options += ['--icon', str(build_icon(target))]
     if target == 'macos':
         options += ['--osx-bundle-identifier', 'com.bailongpet.desktop',
                     '--hidden-import', 'mac_autostart', '--hidden-import', 'AppKit',
@@ -161,7 +155,7 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
             shutil.copytree(decoder_dir / 'ffmpeg-licenses', resources / 'tools/ffmpeg-licenses',
                             dirs_exist_ok=True)
     info = {'version': VERSION, 'branch': BRANCH, 'platform': target, 'architecture': arch,
-            'python': platform.python_version(), 'linuxFamily': family,
+            'python': platform.python_version(),
             'animationFiles': len(inputs[2]), 'validation': 'built; runtime acceptance pending'}
     (resources / 'BUILD_INFO.json').write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding='utf-8')
     if target == 'macos':
@@ -172,26 +166,6 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
                     CFBundleVersion=str(BRANCH_REVISION), BailongBranchVersion=VERSION)
         plist.write_bytes(plistlib.dumps(data))
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(output)], check=True)
-    elif target == 'linux':
-        from PIL import Image
-        idle = inputs[1]['idle']
-        video = inputs[0] / (idle.get('playbackFile') or idle['file'].replace('.webm', '.webp'))
-        if video.suffix.lower() == '.webm':
-            raw = subprocess.check_output([str(inputs[3]), '-v', 'error', '-c:v', 'libvpx-vp9',
-                '-i', str(video), '-frames:v', '1', '-vf', 'scale=256:256',
-                '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1'])
-            icon = Image.frombytes('RGBA', (256, 256), raw)
-        else:
-            with Image.open(video) as frame:
-                icon = frame.convert('RGBA').resize((256, 256))
-        icon.save(output / 'BailongPet.png')
-        launcher = output / 'run.sh'
-        launcher.write_text('#!/usr/bin/env bash\nset -euo pipefail\n'
-                            'cd -- "$(dirname -- "${BASH_SOURCE[0]}")"\n'
-                            'export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"\n'
-                            'export QT_IM_MODULE="${QT_IM_MODULE:-ibus}"\n'
-                            'exec ./BailongPet "$@"\n', encoding='utf-8')
-        launcher.chmod(0o755)
     size = sum(path.stat().st_size for path in output.rglob('*')
                if not path.is_symlink() and path.is_file())
     print(f'构建完成：{output}\n目录体积：{size / 2**20:.2f} MiB', flush=True)

@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
-# Shared Bash interface; sourced by the macOS and Linux entry points.
+# Bash interface for the macOS build entry point.
 
 parse_build_options() {
     BUILD_PYTHON="${PYTHON:-}"
     BUILD_FFMPEG="${BAILONG_BUILD_FFMPEG:-}"
     SKIP_INSTALL=0
-    INSTALL_DEPS=0
     ARCHIVE=0
-    PACKAGE_RPM=0
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --python) BUILD_PYTHON="${2:?--python 需要解释器路径或命令名}"; shift 2 ;;
             --ffmpeg) BUILD_FFMPEG="${2:?--ffmpeg 需要可执行文件路径}"; shift 2 ;;
             --skip-install) SKIP_INSTALL=1; shift ;;
             --archive) ARCHIVE=1; shift ;;
-            --rpm) PACKAGE_RPM=1; shift ;;
-            --install-deps) INSTALL_DEPS=1; shift ;;
             -h|--help)
                 echo "用法：bash $ENTRY [--python 路径或命令] [--ffmpeg 路径] [--skip-install] [--archive]"
                 echo '自动选择已安装的 64 位 Python 3.11～3.13；复用独立构建环境，按需补齐依赖。'
@@ -24,24 +20,12 @@ parse_build_options() {
                     echo '默认使用精简 FFmpeg；首次自动编译，后续复用。需 Xcode Command Line Tools 和 pkg-config。'
                 fi
                 echo '--skip-install：仅检查和构建，不创建环境或安装依赖。'
-                echo '--archive：生成完整本地压缩包；macOS 为 ZIP，Linux 为 tar.gz。'
-                if [[ "$ENTRY" == build-linux-* ]]; then
-                    echo '--install-deps：通过系统包管理器安装 Linux 桌面运行库和构建工具。'
-                fi
-                if [[ "$ENTRY" == build-linux-fedora.sh ]]; then
-                    echo '--rpm：同时生成本地 RPM；需安装 rpm-build 和 desktop-file-utils。'
-                fi
+                echo '--archive：生成完整 macOS ZIP。'
                 echo '环境变量：PYTHON、BUILD_VENV、BAILONG_BUILD_FFMPEG。命令行参数优先。'
                 exit 0 ;;
             *) echo "未知参数：$1；使用 --help 查看用法。" >&2; exit 1 ;;
         esac
     done
-    if [[ "$PACKAGE_RPM" == 1 && "$ENTRY" != build-linux-fedora.sh ]]; then
-        echo '--rpm 仅用于 Fedora 构建入口。' >&2; exit 1
-    fi
-    if [[ "$SKIP_INSTALL" == 1 && "$INSTALL_DEPS" == 1 ]]; then
-        echo '--skip-install 与 --install-deps 不能同时使用。' >&2; exit 1
-    fi
     # Resolve caller-relative paths before entering the repository.
     BUILD_ENV="${BUILD_VENV:-$ROOT/$DEFAULT_VENV}"
     if [[ "$BUILD_ENV" != /* ]]; then BUILD_ENV="$PWD/$BUILD_ENV"; fi
@@ -55,17 +39,13 @@ parse_build_options() {
 }
 
 run_build() {
-    local target="$1" family="${2:-}" candidate dependency_exit needs_install=0
+    local target=macos candidate dependency_exit needs_install=0
     local venv_python="$BUILD_ENV/bin/python"
     local requirements=(-r requirements-build.txt)
     local checks=(work/check_build_dependencies.py)
     local build_args=("work/build_$target.py")
-    if [[ "$target" == macos ]]; then
-        requirements+=(-r requirements-macos.txt)
-        checks+=(--requirements requirements-macos.txt)
-    else
-        build_args+=(--family "$family")
-    fi
+    requirements+=(-r requirements-macos.txt)
+    checks+=(--requirements requirements-macos.txt)
     cd -- "$ROOT"
     export PYTHONUTF8=1
     export PYINSTALLER_CONFIG_DIR="$ROOT/.build/cache/pyinstaller-$target"
@@ -115,7 +95,6 @@ run_build() {
     fi
     if [[ -n "$BUILD_FFMPEG" ]]; then build_args+=(--ffmpeg "$BUILD_FFMPEG"); fi
     if [[ "$ARCHIVE" == 1 ]]; then build_args+=(--archive); fi
-    if [[ "$PACKAGE_RPM" == 1 ]]; then build_args+=(--rpm); fi
     echo '打包程序、素材和 FFmpeg...'
     "$venv_python" "${build_args[@]}"
 }
