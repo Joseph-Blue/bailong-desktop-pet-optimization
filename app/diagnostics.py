@@ -6,15 +6,13 @@ import platform
 import sys
 import time
 from html import escape
-from pathlib import Path, PureWindowsPath
-import re
 import psutil
 
-from PySide6.QtCore import Qt, QTimer, QPointF, QRectF, QUrl
-from PySide6.QtGui import QFont, QPainter, QPainterPath, QPalette, QPen, QDesktopServices
+from PySide6.QtCore import Qt, QTimer, QPointF, QRectF
+from PySide6.QtGui import QFont, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
                                QHBoxLayout, QScrollArea, QDialogButtonBox, QCheckBox,
-                               QFrame, QGridLayout, QSizePolicy, QToolButton, QDialog, QTextBrowser, QToolTip)
+                               QFrame, QGridLayout, QSizePolicy, QToolButton, QToolTip)
 
 from performance_metrics import (PlaybackStatistics, ProcessStatistics,
                                  byte_text, frame_cache_statistics, process_paging_rows)
@@ -31,20 +29,6 @@ def resource_help(platform_name):
             '“桌宠运行内存 (RAM)”还加上了 FFmpeg 的占用，共享部分未去重。\n\n'
             '要对照，请在任务管理器“详细信息”中找到相同 PID，查看“工作集（内存）”列。'
             '这里每秒更新一次，两边刷新时间不同也会产生差异。')
-
-
-def linked_details(text):
-    lines = []
-    for line in text.splitlines():
-        match = re.fullmatch(r'([^：]*：)((?:[A-Za-z]:[\\/]|/).+)', line)
-        if match:
-            prefix, path = match.groups()
-            parent = PureWindowsPath(path).parent if re.match(r'^[A-Za-z]:', path) else Path(path).parent
-            url = QUrl.fromLocalFile(str(parent)).toString(QUrl.ComponentFormattingOption.FullyEncoded)
-            lines.append(f'{escape(prefix)}<a href="{escape(url, quote=True)}">{escape(path)}</a>')
-        else:
-            lines.append(escape(line))
-    return '<br>'.join(lines)
 
 
 class FPSGraph(QWidget):
@@ -124,12 +108,6 @@ class InfoSection(QWidget):
                 help_button.mapToGlobal(help_button.rect().bottomLeft()), help_button.toolTip(), help_button))
             header.addWidget(help_button)
         header.addStretch()
-        details = QToolButton()
-        details.setAutoRaise(True)
-        details.setText('详情')
-        details.setAccessibleName(title + '详情')
-        details.clicked.connect(self.show_details)
-        header.addWidget(details)
         layout.addLayout(header)
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
@@ -162,25 +140,6 @@ class InfoSection(QWidget):
 
     def text(self):
         return self.heading + '\n' + '\n'.join(f'{name}：{value}' for name, value in self.rows)
-
-    def show_details(self):
-        dialog = QDialog(self.window())
-        configure_window(dialog)
-        dialog.setWindowTitle(self.heading + '详情')
-        dialog.resize(640, 420)
-        layout = QVBoxLayout(dialog)
-        content = QTextBrowser()
-        content.setHtml(linked_details(self.text()))
-        content.setOpenLinks(False)
-        content.anchorClicked.connect(lambda url: QDesktopServices.openUrl(url) if url.isLocalFile() else None)
-        layout.addWidget(content)
-        buttons = QDialogButtonBox()
-        copy = buttons.addButton('复制信息', QDialogButtonBox.ButtonRole.ActionRole)
-        copy.clicked.connect(lambda: QApplication.clipboard().setText(content.toPlainText()))
-        layout.addWidget(buttons)
-        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-        dialog.show()
-
 
 class DiagnosticsWindow(QWidget):
     def __init__(self, pet, root):

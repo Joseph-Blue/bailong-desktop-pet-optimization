@@ -286,7 +286,7 @@ GitHub Actions 的 **Build and release five platform packages** 工作流从本�
 
 换页数据只统计主进程。Windows 显示私有提交量并标“仅供参考”；私有提交量不表示实际写入页文件的数量。Linux 读取 `/proc/PID/status` 的 `VmSwap`，显示当前匿名私有换出量，不含共享运行内存 (RAM) 的换出页。macOS 显示累计 Swap 换入量，零表示暂无换入记录，不代表从未换出。GPU 使用率和压缩运行内存 (RAM) 仅在 macOS 显示。
 
-浮窗显示 CPU／GPU 型号，摘要按型号优先显示已识别的独显，其他适配器保留在详情与悬停提示中；这不代表渲染设备选择。长字段悬停显示全文。浮窗还显示桌面端与内置 CLI 的 PID／路径／会话状态。硬件查询仅在窗口打开时发起一次，关闭取消；Windows 通过系统 PowerShell 的 CIM 查询，Linux GPU 型号通过 lspci 获取（发行版 pciutils 包）。macOS 按应用 Bundle ID 识别桌面端，Windows 当前识别 Microsoft Store 安装路径，Linux 明确显示尚未接入桌面端识别。候选 CLI 路径与实际运行进程分开标注，不为统计发起 Codex 请求。
+浮窗显示 CPU／GPU 型号，摘要按型号优先显示已识别的独显，其他适配器保留在悬停提示与复制信息中；这不代表渲染设备选择。长字段悬停显示全文。浮窗还显示桌面端与内置 CLI 的 PID／路径／会话状态。硬件查询仅在窗口打开时发起一次，关闭取消；Windows 通过系统 PowerShell 的 CIM 查询，Linux GPU 型号通过 lspci 获取（发行版 pciutils 包）。macOS 按应用 Bundle ID 识别桌面端，Windows 当前识别 Microsoft Store 安装路径，Linux 明确显示尚未接入桌面端识别。候选 CLI 路径与实际运行进程分开标注，不为统计发起 Codex 请求。
 
 ## 实机验收记录
 
