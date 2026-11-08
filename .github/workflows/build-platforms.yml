@@ -6,6 +6,9 @@ on:
         description: Tag to publish
         required: true
         default: v0.5.1-opt.22
+      artifact_run_id:
+        description: Reuse artifacts from a completed run; leave empty to build
+        default: ''
       build_macos:
         description: Build macOS arm64
         type: boolean
@@ -19,6 +22,7 @@ env:
   PYTHONUTF8: '1'
 jobs:
   windows:
+    if: ${{ !inputs.artifact_run_id }}
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -42,7 +46,7 @@ jobs:
           path: dist-windows/*.zip
           if-no-files-found: error
   macos:
-    if: inputs.build_macos
+    if: ${{ inputs.build_macos && !inputs.artifact_run_id }}
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -70,6 +74,7 @@ jobs:
           name: macos-arm64
           path: dist-macos/*.zip
   linux:
+    if: ${{ !inputs.artifact_run_id }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
@@ -127,9 +132,11 @@ jobs:
           if-no-files-found: error
   publish:
     needs: [windows, macos, linux]
+    if: ${{ always() && !cancelled() && (inputs.artifact_run_id != '' || (needs.windows.result == 'success' && needs.macos.result == 'success' && needs.linux.result == 'success')) }}
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -138,6 +145,8 @@ jobs:
         with:
           path: packages
           merge-multiple: true
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.artifact_run_id || github.run_id }}
       - name: Publish complete packages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -153,4 +162,5 @@ jobs:
           text = text.replace('{{REPO}}', os.environ['GH_REPO'])
           Path('.build/release-notes.md').write_text(text, encoding='utf-8')
           PY
-          gh release create "$RELEASE_TAG" packages/* --verify-tag --title "$RELEASE_TAG · Windows / macOS / Linux" --notes-file .build/release-notes.md
+          mapfile -d '' package_files < <(find packages -type f \( -name '*.zip' -o -name '*.tar.gz' \) -print0)
+          gh release create "$RELEASE_TAG" "${package_files[@]}" --verify-tag --title "$RELEASE_TAG · Windows / macOS / Linux" --notes-file .build/release-notes.md
