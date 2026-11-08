@@ -2,5 +2,7 @@ from pathlib import Path
 import sys,subprocess,shutil,json
 root=Path(__file__).resolve().parents[1];sys.path.insert(0,str(root/'.build/tools'));sys.path.insert(0,str(root/'app'))
 from version import VERSION
+from fetch_release_assets import ensure_assets
+ensure_assets()
 import PyInstaller.__main__
 PyInstaller.__main__.run(['--noconfirm','--clean','--onedir','--windowed','--name','BailongPet','--distpath',str(root/'dist-windows'/f'build-v{VERSION}'),'--workpath',str(root/'.build/work/windows'/f'work-v{VERSION}'),'--specpath',str(root/'.build/work/windows'),'--exclude-module','numpy','--exclude-module','scipy','--exclude-module','matplotlib','--exclude-module','tkinter','--exclude-module','PyQt5','--exclude-module','PyQt6','--hidden-import','autostart','--hidden-import','selftest','--hidden-import','version',str(root/'app/pet.py')])

@@ -19,6 +19,7 @@ parse_build_options() {
             -h|--help)
                 echo "用法：bash $ENTRY [--python 路径或命令] [--ffmpeg 路径] [--skip-install] [--archive]"
                 echo '自动选择已安装的 64 位 Python 3.11～3.13；复用独立构建环境，按需补齐依赖。'
+                echo '缺少动画素材时自动下载；已有素材文件不覆盖。'
                 echo '--skip-install：仅检查和构建，不创建环境或安装依赖。'
                 echo '--archive：生成完整本地压缩包；macOS 为 ZIP，Linux 为 tar.gz。'
                 if [[ "$ENTRY" == build-linux-* ]]; then

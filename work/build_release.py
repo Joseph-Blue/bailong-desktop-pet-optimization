@@ -6,6 +6,8 @@ import ast,html,json,shutil,zipfile,hashlib,sys
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app'))
 from version import VERSION
+from fetch_release_assets import ensure_assets
+ensure_assets()
 OUT=ROOT/'dist-windows'
 webm=json.loads((ROOT/'outputs/白龙桌宠素材/素材清单.json').read_text(encoding='utf-8'))['idle'].get('playbackFile','').endswith('.webm')
 edition='-webm' if webm else ''

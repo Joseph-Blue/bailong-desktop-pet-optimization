@@ -4,7 +4,7 @@
 .SYNOPSIS
 检查并补齐 Windows 构建依赖，生成完整目录包，可选 ZIP。
 .DESCRIPTION
-自动选择 64 位 Python 3.11～3.13。
+自动选择 64 位 Python 3.11～3.13；缺少动画素材时自动下载，保留已有文件。
 可运行目录与 ZIP 均放在仓库根目录的 dist-windows/。
 使用独立虚拟环境，仅当依赖缺失、版本不符或 pip check 失败时安装依赖。
 .PARAMETER Python

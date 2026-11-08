@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.22`。私有仓库 Release 提供五平台完整运行包；本地脚本也可在目标系统生成目录包与可选压缩包。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.23`。私有仓库 Release 提供五平台完整运行包；本地脚本也可在目标系统生成目录包与可选压缩包。
 
 ## 所有平台先准备
 
@@ -26,7 +26,7 @@
 ### 素材与解释器
 
 1. 使用 **64 位 Python 3.11～3.13**。解释器版本和架构决定产物；不交叉编译，不自动构建另一种架构。
-2. 从[原作者 v0.5.1 完整 Windows 包](https://github.com/jingh12312-rgb/bailong-desktop-pet/releases/tag/v0.5.1)取出 `outputs/白龙桌宠素材`，放到仓库同名路径；保留素材清单及原目录结构。各平台共用这些原始 WebM，不使用 Swift 工程转换后的素材。
+2. 构建会自动补齐 `outputs/白龙桌宠素材` 的清单和引用文件；已有文件不覆盖。素材来自 **jingh12312-rgb** 的 [v0.5.1 原始发布](https://github.com/jingh12312-rgb/bailong-desktop-pet/releases/tag/v0.5.1)。作者不在 Git 中存放 `outputs`，因此使用 Release 下载而非 clone；各平台共用原始 WebM。
 3. FFmpeg 选择顺序为：脚本 `--ffmpeg`／`-FFmpeg` 参数、`BAILONG_BUILD_FFMPEG` 环境变量、仓库 `tools/ffmpeg[.exe]`、`imageio-ffmpeg` 包提供的本机二进制。跨平台复制素材时不要把 Windows 的 ffmpeg.exe 当作 macOS／Linux 解码器。自备 FFmpeg 必须能在构建机器运行，并包含 `libvpx-vp9`。
 
 所有平台入口先检查已安装依赖，缺失、版本不符或依赖关系冲突时才通过 pip 补齐。没有本地缓存时安装需要网络；都不改系统 Python 的包。`imageio-ffmpeg` 只用于提供构建时的 FFmpeg，运行包不需要 Python 环境。构建目录只包含清单引用的动画，不复制用户历史、状态文件或整个源码目录。
@@ -42,7 +42,19 @@ Windows 使用 PowerShell，其他平台使用 Bash。共同参数如下：
 
 自动选择已安装的 64 位 Python 3.11～3.13；已有构建环境继续复用。解释器与 FFmpeg 参数都是单个路径或命令名，不附加命令参数；相对路径按调用位置解析。Bash 继续支持 `PYTHON`、`BUILD_VENV` 和 `BAILONG_BUILD_FFMPEG` 环境变量，命令行参数优先。Linux 另有 `--install-deps`，与 `--skip-install` 互斥。
 
-可运行目录和压缩包放在可见的 `dist-windows/`、`dist-macos/`、`dist-linux/`；Linux 分为 `debian-<architecture>/`、`arch-<architecture>/`、`fedora-<architecture>/`，各阵营的包互不混放。被 Git 忽略的 `.build/` 仅集中构建虚拟环境 `venvs/`、中间文件 `work/`、缓存 `cache/`、解码器构建 `ffmpeg/` 和下载缓存 `downloads/`。`outputs/` 原始素材与用户数据不迁移。缺少素材会直接报出路径。
+可运行目录和压缩包放在可见的 `dist-windows/`、`dist-macos/`、`dist-linux/`；Linux 分为 `debian-<architecture>/`、`arch-<architecture>/`、`fedora-<architecture>/`，各阵营的包互不混放。被 Git 忽略的 `.build/` 仅集中构建虚拟环境 `venvs/`、中间文件 `work/`、缓存 `cache/`、解码器构建 `ffmpeg/` 和下载缓存 `downloads/`。`outputs/` 原始素材与用户数据不迁移。缺少素材时先自动下载；下载后仍缺少清单引用文件时，报出具体路径。
+
+## 素材自动下载
+
+Windows PowerShell、macOS Bash、三类 Linux Bash 入口及对应 Python 构建入口共用 `work/fetch_release_assets.py`。作者原有 `work/build_windows.py` 与 `work/build_release.py` 也接入该逻辑。已有清单及全部引用动画时不联网；缺少清单或任一动画时下载一次，只补缺失文件。RPM 和压缩脚本使用已生成的完整目录包，不另下载源素材。
+
+- 存在 `GH_TOKEN`／`GITHUB_TOKEN`，或已用 GitHub CLI 登录时，默认下载本私有仓库的 **`v0.5.1-opt.assets.1`** 素材包，需要该账号具有仓库读取权限。
+- 没有 GitHub 登录时，自动下载作者公开 **v0.5.1** Windows 完整 ZIP，只提取 `outputs`，不安装或运行其中程序。
+- 下载包保留在 `.build/downloads/`。可用 `ASSET_REPOSITORY` 和 `ASSET_RELEASE_TAG` 显式选择素材来源；访问错误直接报出，不隐藏失败。
+- `--skip-install`／`-SkipInstall` 只跳过依赖安装；要离线构建，先准备完整素材及依赖。
+- GitHub Actions 继续使用当前仓库 token，下载相同素材包。素材、账号数据和下载缓存不提交 Git。
+
+单独准备素材：`python work/fetch_release_assets.py`。重新制作独立素材 ZIP：`python work/package_assets.py`，输出 `.build/assets/bailong-original-v0.5.1-assets.zip`；只包含清单引用的原始动画、素材清单和作者来源说明，不包含程序或运行库。来源与原作者说明见 [ASSETS.md](ASSETS.md)。
 
 ## Windows：PowerShell 5.1／7+
 
@@ -74,10 +86,10 @@ winget install --id Python.Python.3.13 --exact
 2. 首次创建独立虚拟环境并检查解释器。整个流程直接调用环境内的 `python.exe`，无需运行 `Activate.ps1`。
 3. 检查 pip 和 `requirements-build.txt`（含 `requirements.txt`）中的锁定版本；版本满足后再执行 `pip check` 检查依赖关系。
 4. 依赖缺失、版本不符或关系冲突时，默认调用 pip 安装锁定依赖；pip 缺失时先通过 Python 自带的 `ensurepip` 补齐。安装后重新检查，仍有错误则中止。依赖已满足时跳过安装；`-SkipInstall` 遇到缺失或冲突只报错。
-5. 校验素材及 FFmpeg 的 `libvpx-vp9` 解码器，再用 PyInstaller 打包，整理素材、音效和解码器。
+5. 自动补齐缺失的素材，检查 FFmpeg 的 `libvpx-vp9` 解码器，再用 PyInstaller 打包，整理素材、音效和解码器。
 6. 使用 `-Zip` 时压缩刚生成的整个 `BailongPet` 目录。
 
-`Get-Help .\build-windows.ps1 -Detailed` 可查看参数说明。脚本不会自动下载角色素材；请先按上文准备。Windows 默认使用仓库内的 `tools/ffmpeg.exe` 精简解码器。
+`Get-Help .\build-windows.ps1 -Detailed` 可查看参数说明。缺少角色素材时自动下载，已有文件保留。Windows 默认使用仓库内的 `tools/ffmpeg.exe` 精简解码器。
 
 也可从终端使用 `powershell.exe -NoProfile -File .\build-windows.ps1` 或 `pwsh -NoProfile -File .\build-windows.ps1`。如果下载文件被本机策略阻止，先检查脚本来源并按所在设备的执行策略处理；脚本不会修改执行策略。
 
@@ -85,9 +97,9 @@ winget install --id Python.Python.3.13 --exact
 
 维护此脚本时保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 可能将无 BOM 的 UTF-8 脚本按系统代码页解读，导致中文错误或解析失败。脚本兼容两种 PowerShell 不代表支持旧版 Windows；Python、Qt 与 FFmpeg 的系统及架构要求仍需满足。
 
-虚拟环境：`.build/venvs/windows/`。产物：`dist-windows/build-v0.5.1-opt.22/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.build/venvs/windows/`。产物：`dist-windows/build-v0.5.1-opt.23/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `dist-windows/bailong-desktop-pet-v0.5.1-opt.22-windows-x86_64.zip`。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；五平台发布由 GitHub Actions 工作流执行。
+在 x64 解释器下使用 `-Zip`，另生成 `dist-windows/bailong-desktop-pet-v0.5.1-opt.23-windows-x86_64.zip`。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；五平台发布由 GitHub Actions 工作流执行。
 
 `build-windows.ps1` 调用独立的 `work/build_windows_optimized.py`，整理完整目录包。作者原版 `work/build_windows.py` 保留在原路径，继续与 `work/build_release.py` 搭配使用。两套入口并存，自动化入口不调用原发行脚本。
 
@@ -96,9 +108,9 @@ winget install --id Python.Python.3.13 --exact
 | 原作步骤 | 本分支的处理 |
 | --- | --- |
 | `python -m pip install --target .build/tools pyinstaller==6.22.3` | 原脚本仍从 `.build/tools` 加载 PyInstaller。PS 自动化入口则在 `.build/venvs/windows` 内安装 `requirements-build.txt`；两套流程均需应用依赖 |
-| `python work/build_windows.py` | 保留作者原版内容，生成 EXE 与运行库；优化版另存为 `work/build_windows_optimized.py`，直接生成含素材和 FFmpeg 的完整目录包 |
+| `python work/build_windows.py` | 保留作者构建流程并接入素材自动下载，生成 EXE 与运行库；优化版另存为 `work/build_windows_optimized.py`，直接生成含素材和 FFmpeg 的完整目录包 |
 | FFmpeg 放到 `work/video-deps/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe` | 这是旧 ZIP 脚本硬编码的位置；新入口用 `-FFmpeg` 指定，或放到 `tools/ffmpeg.exe`，也可使用默认依赖提供的版本 |
-| 保留 `outputs` 素材 | 仍需要，清单及引用文件必须完整；默认脚本不下载素材 |
+| 保留 `outputs` 素材 | 所有应用构建入口自动补齐缺失的清单和动画，已有素材不覆盖 |
 | `python work/build_release.py` 整理 ZIP | 原流程继续保留，源码清单补齐本分支运行模块、不引用本地新增测试。PS 自动化入口使用 `-Zip`，优化版 Python 入口使用 `--zip` |
 
 如果要使用原作完整包中的 FFmpeg，可将其 `tools/ffmpeg.exe` 复制到本仓库 `tools/ffmpeg.exe`，或直接传入该文件的完整路径，不需要复制整个 `work/video-deps`。
@@ -240,7 +252,7 @@ Windows 输出位于 `.build/ffmpeg/windows-x86_64/bin/`。更新仓库解码器
 
 ## 自动构建其他平台
 
-GitHub Actions 的 **Build and release five platform packages** 工作流从原作者 v0.5.1 完整包提取原始动画，再分别编译和打包：
+GitHub Actions 的 **Build and release five platform packages** 工作流从本仓库独立素材包准备原作者 v0.5.1 动画，再分别编译和打包：
 
 | 产物 | 构建环境 |
 | --- | --- |
@@ -256,7 +268,7 @@ GitHub Actions 的 **Build and release five platform packages** 工作流从原�
 
 按需解码同时减少加载等待：首批画面就绪即可播放，后续帧随播放补充，大幅缩短启动和切换动作的等待时间。
 
-默认分辨率 512×512、预加载 12 帧、满帧，整段动画预加载关闭。运行帧率档位为满帧／20／15 FPS，与 Swift 版一致；满帧使用素材帧率，当前素材为 24 或 30 FPS。预加载帧数支持输入和 6～240 帧滑条。整段预加载只加载当前动作，开启时保留并禁用帧数设置。应用后重播当前动作并保存设置；已有有效设置继续保留。
+默认分辨率 512×512、预加载 12 帧、满帧，整段动画预加载关闭。运行帧率档位为满帧／20／15 FPS，与 Swift 版一致；满帧使用素材帧率，当前素材为 24 或 30 FPS。预加载帧数支持输入和 6～240 帧滑条。整段预加载只加载当前动作，开启时保留并禁用帧数设置。调整后立即重播当前动作并保存设置，无需点击“应用”；手动输入帧数在回车或离开输入框时生效。“恢复默认”直接生效，已有有效设置继续保留。
 
 ## 性能统计范围
 

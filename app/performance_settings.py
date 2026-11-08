@@ -1,5 +1,5 @@
 """Cross-platform performance controls using the system font and palette."""
-from PySide6.QtCore import Qt, QRectF
+from PySide6.QtCore import Qt, QRectF, QSignalBlocker
 from PySide6.QtGui import QPainter, QPalette
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
                                QComboBox, QLineEdit, QSlider, QCheckBox, QDialogButtonBox,
@@ -103,24 +103,20 @@ class PerformanceSettings(QDialog):
         self.columns = Columns(playback, buffer)
         layout.addWidget(self.columns)
         layout.addStretch()
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Apply |
-                                   QDialogButtonBox.StandardButton.RestoreDefaults)
-        self.apply_button = buttons.button(QDialogButtonBox.StandardButton.Apply)
-        self.apply_button.setText('应用')
-        self.apply_button.clicked.connect(self.apply)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.RestoreDefaults)
         reset = buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults)
         reset.setText('恢复默认')
+        reset.setAutoDefault(False)
         reset.clicked.connect(self.reset_defaults)
         layout.addWidget(buttons)
-        for before, after in zip((self.quality, self.fps, self.capacity, self.buffer_slider, self.preload, reset),
-                                 (self.fps, self.capacity, self.buffer_slider, self.preload, reset, self.apply_button)):
+        for before, after in zip((self.quality, self.fps, self.capacity, self.buffer_slider, self.preload),
+                                 (self.fps, self.capacity, self.buffer_slider, self.preload, reset)):
             self.setTabOrder(before, after)
-        self.quality.currentIndexChanged.connect(self.refresh)
-        self.fps.currentIndexChanged.connect(self.refresh)
+        self.quality.currentIndexChanged.connect(self.apply)
+        self.fps.currentIndexChanged.connect(self.apply)
         self.capacity.editingFinished.connect(self.commit_capacity)
-        self.capacity.textChanged.connect(self.refresh)
         self.buffer_slider.valueChanged.connect(self.slider_changed)
-        self.preload.toggled.connect(self.refresh)
+        self.preload.toggled.connect(self.apply)
         self.refresh()
 
     def capacity_value(self):
@@ -133,27 +129,33 @@ class PerformanceSettings(QDialog):
     def commit_capacity(self):
         value = self.capacity_value()
         self.capacity.setText(str(value))
-        self.buffer_slider.setValue(value)
+        with QSignalBlocker(self.buffer_slider):
+            self.buffer_slider.setValue(value)
+        self.apply()
 
     def slider_changed(self, value):
         self.capacity.setText(str(value))
+        self.apply()
 
     def refresh(self):
         self.preload_state.setText('已开启' if self.preload.isChecked() else '已关闭')
         self.buffer_controls.setEnabled(not self.preload.isChecked())
-        selected = (self.quality.currentData(), self.capacity_value(), self.fps.currentData(), self.preload.isChecked())
-        saved = (self.pet.resolution, self.pet.buffer_capacity, self.pet.fps_limit, self.pet.preload_whole)
-        self.apply_button.setEnabled(selected != saved)
 
     def apply(self):
-        self.commit_capacity()
-        self.pet.apply_performance(self.quality.currentData(), self.capacity_value(),
-                                   self.fps.currentData(), self.preload.isChecked())
+        selected = (self.quality.currentData(), self.buffer_slider.value(),
+                    self.fps.currentData(), self.preload.isChecked())
+        saved = (self.pet.resolution, self.pet.buffer_capacity, self.pet.fps_limit, self.pet.preload_whole)
+        if selected != saved:
+            self.pet.apply_performance(*selected)
         self.refresh()
 
     def reset_defaults(self):
-        self.quality.setCurrentIndex(self.quality.findData(DEFAULT_RESOLUTION))
-        self.capacity.setText(str(DEFAULT_BUFFER_FRAMES))
-        self.buffer_slider.setValue(DEFAULT_BUFFER_FRAMES)
-        self.fps.setCurrentIndex(self.fps.findData(DEFAULT_FPS_LIMIT))
-        self.preload.setChecked(False)
+        # 一次恢复全部设置，避免每个控件的信号分别重启当前动画。
+        with (QSignalBlocker(self.quality), QSignalBlocker(self.buffer_slider),
+              QSignalBlocker(self.fps), QSignalBlocker(self.preload)):
+            self.quality.setCurrentIndex(self.quality.findData(DEFAULT_RESOLUTION))
+            self.capacity.setText(str(DEFAULT_BUFFER_FRAMES))
+            self.buffer_slider.setValue(DEFAULT_BUFFER_FRAMES)
+            self.fps.setCurrentIndex(self.fps.findData(DEFAULT_FPS_LIMIT))
+            self.preload.setChecked(False)
+        self.apply()

@@ -24,10 +24,10 @@ Linux 包按发行版阵营区分。Fedora 包在 Fedora 44 构建；Debian 包�
 
 ## 本轮变化与说明
 
-- Linux 统一直接运行与 run.sh 的 XCB 启动路径，补齐 fcitx5 输入法和 Codex Desktop CLI 查找。
-- 修复 Linux 音效与连续点击时气泡文字裁切；应用图标与待机/托盘图标一致。
-- Linux 排除 PDF、虚拟键盘、AVIF 和 QtMultimedia 依赖；原始动画保持不变，GTK 主题插件保留。
-- 构建脚本统一使用方式：Windows 为 PowerShell，macOS/Linux 为 Bash；可运行产物放在可见的 dist 目录。
+- 任务进度和完成气泡按实际文字高度收缩，长内容变短时收回空白；长结果仍可滚动。
+- 性能设置即时保存并生效，移除“应用”按钮；全新配置和恢复默认使用 512×512。
+- 桌宠角色窗口关闭系统阴影，原始素材不变。
+- 所有应用构建入口自动补齐缺失素材；已有文件不覆盖。素材来自原作者 **jingh12312-rgb**，本仓库仅整理[独立素材包](https://github.com/{{REPO}}/releases/tag/v0.5.1-opt.assets.1)，没有 GitHub 登录时使用作者公开发布包。
 
 [更新记录](https://github.com/{{REPO}}/blob/{{TAG}}/CHANGELOG.md) · [构建说明、运行依赖与数据目录](https://github.com/{{REPO}}/blob/{{TAG}}/BUILDING.md) · [项目主页](https://github.com/{{REPO}}/tree/{{TAG}}) · [素材说明](https://github.com/{{REPO}}/blob/{{TAG}}/ASSETS.md) · [原作者项目](https://github.com/jingh12312-rgb/bailong-desktop-pet)
 

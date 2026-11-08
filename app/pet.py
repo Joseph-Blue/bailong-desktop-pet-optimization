@@ -1,4 +1,4 @@
-import json, random, sys, time, threading, os
+import json, random, sys, time, threading, os, math
 from pathlib import Path
 from datetime import datetime
 
@@ -69,7 +69,7 @@ class Bubble(QWidget):
         self.setStyleSheet(f'QLabel {{color:#332644;}} QProgressBar {{background:#eee8f5;border:1px solid #c8b5dc;border-radius:5px;height:{round(14*s)}px;}} QProgressBar::chunk {{background:#a47bc9;border-radius:5px;}}')
         for view in self.findChildren(QTextBrowser):
             view.document().setDefaultFont(self.font())
-            view.setFixedHeight(round((view.property('baseHeight') or 76)*s))
+            if self.is_size_preview:view.setFixedHeight(round(110*s))
             view.setStyleSheet('QTextBrowser {color:#332644;background:transparent;border:0;}')
         close_font=readable_font(s);close_font.setPointSizeF(close_font.pointSizeF()*1.333)
         self.close_button.setFont(close_font)
@@ -83,8 +83,19 @@ class Bubble(QWidget):
         self.close_button.setStyleSheet('QPushButton {color:#776783;background:transparent;border:0;border-radius:8px;} QPushButton:hover {background:#eee5f7;color:#503768;}')
         for index in range(self.layout.count()):
             self.layout.itemAt(index).widget().show()
+        self.fit_content()
+    def fit_content(self):
         self.ensurePolished()
         self.layout.invalidate()
+        self.layout.activate()
+        if self.is_task_bubble:
+            view=self.result_view;document=view.document()
+            # 按无滚动条时的可用宽度测量，长内容变短后也能收回原有空白。
+            document.setTextWidth(view.maximumViewportSize().width())
+            content_height=math.ceil(document.size().height())+2*view.frameWidth()
+            view.setFixedHeight(min(round(150*self.scale_percent/100),content_height))
+            # 先更新布局最小高度，再缩小窗口，避免被上一条内容的高度限制。
+            self.layout.invalidate();self.layout.activate()
         height=self.layout.totalHeightForWidth(self.width()) if self.layout.hasHeightForWidth() else self.layout.sizeHint().height()
         self.resize(self.width(),height)
         self.layout.activate()
@@ -117,8 +128,6 @@ class Bubble(QWidget):
         self.result_title=self.layout.itemAt(0).widget()
         result=QTextBrowser();result.setPlainText(text);result.setOpenLinks(False)
         result.setStyleSheet('QTextBrowser {color:#332644;background:transparent;border:0;}')
-        base_height=150 if len(text)>180 or len(text.splitlines())>6 else 76
-        result.setProperty('baseHeight',base_height);result.setFixedHeight(base_height)
         self.result_view=result
         self.layout.addWidget(result)
         button=QPushButton('详情');button.setStyleSheet('color:#60358c;background:#eee5f7;border:0;border-radius:7px;padding:7px;')
@@ -143,12 +152,13 @@ class Bubble(QWidget):
     def size_preview(self):
         self.clear();self.is_size_preview=True;self.is_task_bubble=False
         self.is_task_progress=False;self.is_quota_result=True;self.base_width=300
-        blank=QTextBrowser();blank.setProperty('baseHeight',110)
+        blank=QTextBrowser()
         self.layout.addWidget(blank);self.set_scale_percent(self.scale_percent);self.show()
 
 class Pet(QWidget):
     def __init__(self):
-        super().__init__(None,FLAGS)
+        # 角色沿用原素材透明边缘，不叠加桌面系统的窗口阴影。
+        super().__init__(None,FLAGS|Qt.WindowType.NoDropShadowWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setWindowTitle('白龙桌宠');self.setFixedSize(256,256)
@@ -629,6 +639,7 @@ class Pet(QWidget):
             view=self.bubble.result_view;bar=view.verticalScrollBar()
             bottom=bar.value()>=bar.maximum()-8;old=bar.value()
             self.bubble.result_title.setText(title);view.setPlainText(text)
+            self.bubble.fit_content()
             bar.setValue(bar.maximum() if bottom else min(old,bar.maximum()))
         else:
             self.bubble.task_result(title,text,details);self.bubble.is_task_progress=True

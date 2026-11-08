@@ -1,4 +1,4 @@
-"""Shared local packaging inputs; no publishing or asset downloads."""
+"""Shared local packaging inputs with on-demand original artwork downloads."""
 import json
 import os
 from pathlib import Path
@@ -11,6 +11,7 @@ from importlib import metadata
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
 from version import BASE_VERSION, BRANCH, BRANCH_REVISION, VERSION
+from fetch_release_assets import ensure_assets, animation_items, animation_paths
 
 
 def check_python():
@@ -21,20 +22,12 @@ def check_python():
 
 
 def build_inputs(ffmpeg_arg=None):
+    ensure_assets()
     assets = ROOT / 'outputs/白龙桌宠素材'
     manifest_path = assets / '素材清单.json'
-    if not manifest_path.is_file():
-        raise SystemExit('缺少 outputs/白龙桌宠素材/素材清单.json；请按 BUILDING.md 放入原作者素材。')
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
-    items = ([manifest['idle']] + manifest.get('additionalIdleAnimations', [])
-             + manifest['variants'] + [v for v in manifest.get('workAnimations', []) if v]
-             + manifest.get('movementAnimations', [])
-             + [manifest[k] for k in ('dragAnimation', 'landingAnimation', 'quotaAnimation') if manifest.get(k)])
-    paths = {v.get('playbackFile') or v['file'].replace('.webm', '.webp') for v in items}
-    paths.update(v['returnTransition']['file'] for v in items if v.get('returnTransition'))
-    for relative in sorted(paths):
-        if not (assets / relative).is_file():
-            raise SystemExit(f'缺少素材：{assets / relative}')
+    items = animation_items(manifest)
+    paths = animation_paths(manifest)
     for item in items:
         item.pop('source', None)
     ffmpeg = None
