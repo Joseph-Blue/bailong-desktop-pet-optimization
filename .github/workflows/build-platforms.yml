@@ -15,12 +15,16 @@ on:
         default: '["debian","fedora","arch"]'
 permissions:
   contents: read
+env:
+  PYTHONUTF8: '1'
 jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -43,6 +47,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -92,6 +98,8 @@ jobs:
               ;;
           esac
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
       - name: Select Python 3.13
         if: matrix.family != 'debian'
         run: |
@@ -124,6 +132,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
       - uses: actions/download-artifact@v4
         with:
           path: packages
