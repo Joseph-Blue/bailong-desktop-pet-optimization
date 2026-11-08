@@ -2,7 +2,7 @@
 
 基于 [原作者 v0.5.1](https://github.com/jingh12312-rgb/bailong-desktop-pet)，基线提交 `b102e73`。沿用 Python、PySide6、FFmpeg 和原始动画素材，维护 Windows、macOS、Linux 构建入口。
 
-当前版本 **0.5.1-opt.13**，分支 `joseph/optimization`。`opt.N` 表示本分支的迭代号，界面版本同时显示平台和架构。
+当前版本 **0.5.1-opt.14**，分支 `joseph/optimization`。`opt.N` 表示本分支的迭代号，界面版本同时显示平台和架构。
 
 [下载](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases) · [构建说明](BUILDING.md) · [更新记录](CHANGELOG.md) · [开发约定](DEVELOPMENT.md) · [给原作者的优化说明](优化说明.md)
 
@@ -16,7 +16,7 @@
 | 性能界面 | 双栏布局，窄窗口上下排列；长字段省略，悬停和详情显示全文 |
 | 资源统计 | 运行内存 (RAM) 分列主进程与 FFmpeg；换页按主进程统计，Windows 私有提交量标“仅供参考” |
 | 工具调用 | 显示临时进度和执行状态，长内容截断，不写入历史消息 |
-| 字体 | 系统字体、点字号和 Windows 中文回退字体；气泡缩小时保留 12 pt 下限 |
+| 字体 | Windows 沿用原作微软雅黑，其他平台使用系统字体；字号跟随系统，气泡缩小时保留正文大小 |
 | Windows 包 | 精简 FFmpeg；排除软件 OpenGL、PDF 图片、Qt 虚拟键盘和 Pillow AVIF 组件，保留 QtMultimedia |
 
 ## Windows 构建
@@ -31,9 +31,9 @@
 
 仓库追踪 `tools/ffmpeg.exe`：FFmpeg **7.1.5** + libvpx **1.17.0**，面向 Windows x86_64，保留 WebM / VP9 透明解码、缩放、帧率调整和 RGBA 输出。普通打包直接使用它。重编译见 [精简 FFmpeg](BUILDING.md#精简-ffmpeg)。
 
-产物：`发布包/build-v0.5.1-opt.13/BailongPet/`。完整解压后运行 `BailongPet.exe`；用户机器无需另装 Python 或 FFmpeg。
+产物：`发布包/build-v0.5.1-opt.14/BailongPet/`。完整解压后运行 `BailongPet.exe`；用户机器无需另装 Python 或 FFmpeg。
 
-本次 Windows 完整包约 **191.76 MiB ZIP / 256.67 MiB 解压后**，包含全部原始素材与依赖许可；此前 opt.11 目录为 349.31 MiB。
+opt.13 Windows 完整包约 **191.76 MiB ZIP / 256.67 MiB 解压后**，包含全部原始素材与依赖许可；此前 opt.11 目录为 349.31 MiB。
 
 作者原入口 `work/build_windows.py`、`work/build_release.py` 继续保留。PowerShell 调用独立的 `work/build_windows_optimized.py`。
 

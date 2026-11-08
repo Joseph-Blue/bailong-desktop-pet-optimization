@@ -6,11 +6,14 @@ from PySide6.QtWidgets import QApplication, QBoxLayout, QWidget, QSizePolicy
 
 
 def readable_font(scale=1.0):
-    """Use point sizes so Qt handles monitor DPI; keep small bubbles readable."""
+    """Preserve native sizing; match the original Windows dialogue typeface."""
     font = QFont(QApplication.font())
     if sys.platform == 'win32':
-        font.setFamilies(list(dict.fromkeys(font.families() + ['Microsoft YaHei UI', 'Microsoft YaHei'])))
-    font.setPointSizeF(max(12.0, font.pointSizeF()) * max(1.0, scale))
+        font.setFamilies(['Microsoft YaHei', 'Segoe UI'])
+    if font.pointSizeF() > 0:
+        font.setPointSizeF(font.pointSizeF() * max(1.0, scale))
+    elif font.pixelSize() > 0:
+        font.setPixelSize(round(font.pixelSize() * max(1.0, scale)))
     return font
 
 

@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.13`。本地脚本生成目录包与压缩包，GitHub Release 提供各平台下载。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.14`。本地脚本生成目录包与压缩包，GitHub Release 提供各平台下载。
 
 ## 所有平台先准备
 
@@ -74,9 +74,9 @@ winget install --id Python.Python.3.13 --exact
 
 维护此脚本时保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 可能将无 BOM 的 UTF-8 脚本按系统代码页解读，导致中文错误或解析失败。脚本兼容两种 PowerShell 不代表支持旧版 Windows；Python、Qt 与 FFmpeg 的系统及架构要求仍需满足。
 
-虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.13/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.14/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.13-windows-x86_64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；本分支 Release 使用新构建包，依赖许可一并收集。
+在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.14-windows-x86_64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；本分支 Release 使用新构建包，依赖许可一并收集。
 
 `build-windows.ps1` 调用独立的 `work/build_windows_optimized.py`，整理完整目录包。作者原版 `work/build_windows.py` 保留在原路径，继续与 `work/build_release.py` 搭配使用。两套入口并存，自动化入口不调用原发行脚本。
 
