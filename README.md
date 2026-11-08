@@ -2,18 +2,18 @@
 
 基于 [jingh12312-rgb/bailong-desktop-pet](https://github.com/jingh12312-rgb/bailong-desktop-pet) 的 `b102e73 / v0.5.1`，保留 Python + PySide6 + FFmpeg 和作者原始素材。与独立 Swift/AppKit 项目分开维护。
 
-当前版本 **0.5.1-opt.10**，分支 **joseph/optimization**。作者版本号保留，`opt.N` 是本分支的 SemVer 预发布迭代号。私人源码仓库：[Joseph-Blue/bailong-desktop-pet-optimization](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization)。**本仓库不提供 Release，也不上传构建产物或动画素材。**
+当前版本 **0.5.1-opt.11**，分支 **joseph/optimization**。作者版本号保留，`opt.N` 是本分支的 SemVer 预发布迭代号。私人源码仓库：[Joseph-Blue/bailong-desktop-pet-optimization](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization)。**本仓库不提供 Release，也不上传构建产物或动画素材。**
 
 ## 本分支的变化
 
 - 动画按需解码，各平台默认 512×512、12 帧缓冲、满帧；帧率档位与 Swift 版一致，为满帧／20／15 FPS，保持动作时长和 VP9 透明度。当前素材满帧为 24 或 30 FPS。
 - 缓冲支持输入框与 6～240 帧滑条；整段动画预加载默认关闭，开启时仅预加载当前动作，保留并禁用缓冲设置。
-- 性能设置和统计采用双栏布局，窄窗口自动上下排列。统计显示 FPS、CPU、CPU／GPU 型号和桌宠 RAM；Windows 显示系统虚拟内存，Linux／macOS 显示 Swap。桌宠 RAM 为主进程与 FFmpeg 合计。
+- 性能设置和统计采用双栏布局，窄窗口自动上下排列。统计显示 FPS、CPU、CPU／GPU 型号和运行内存 (RAM)，GPU 摘要优先显示已识别的独显，长字段悬停显示全文。桌宠运行内存 (RAM) 为主进程与 FFmpeg 合计，换页数据单独按主进程统计。
 - macOS 窗口置顶、跨 Space、独立历史目录、Codex 可执行文件定位及 Command 提示修正。
-- 桌宠自有对话与 Codex 只读同步记录区分，避免误恢复外部占用的会话。
+- 桌宠自有对话与 Codex 只读同步记录区分，避免误恢复外部占用的会话。工具调用显示为临时进度，长内容省略、不写入聊天历史；单次调用失败不再触发持续任务告警。
 - Windows、macOS 和三类 Linux 构建入口随源码维护。FFmpeg 仅保留一份，Windows 构建排除未使用的 PDF、Qt 虚拟键盘和 Pillow AVIF 组件。
 
-详细变化见 [CHANGELOG.md](CHANGELOG.md)，完整准备、命令、产物路径和实机验收见 [BUILDING.md](BUILDING.md)。
+给原作者的说明见 [优化说明.md](优化说明.md)。详细变化见 [CHANGELOG.md](CHANGELOG.md)，完整准备、命令、产物路径和实机验收见 [BUILDING.md](BUILDING.md)。
 
 ## 构建入口
 

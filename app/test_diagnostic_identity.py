@@ -27,10 +27,24 @@ class IdentityTests(unittest.TestCase):
         output = json.dumps({'cpu': 'Example CPU', 'gpu': ['GPU A', 'GPU B']})
         self.assertEqual(parse_hardware(output, 'win32'), ('Example CPU', 'GPU A、GPU B'))
 
+    def test_discrete_gpu_precedes_virtual_and_integrated_adapters(self):
+        output = json.dumps({'cpu': 'Example CPU', 'gpu': [
+            'OrayIddDriver Device', 'AicUsbDisplay Device', 'Intel UHD Graphics',
+            'NVIDIA GeForce RTX 5090 D', 'NVIDIA GeForce RTX 5090 D']})
+        _, names = parse_hardware(output, 'win32')
+        self.assertEqual(names.split('、'), ['NVIDIA GeForce RTX 5090 D', 'Intel UHD Graphics',
+                                             'OrayIddDriver Device', 'AicUsbDisplay Device'])
+
     def test_linux_filters_non_display_devices(self):
         output = ('00:02.0 "VGA compatible controller" "Example Vendor" "GPU A"\n'
                   '00:03.0 "Audio device" "Other Vendor" "Audio"\n')
         self.assertEqual(parse_hardware(output, 'linux'), (None, 'Example Vendor GPU A'))
+
+    def test_discrete_amd_and_intel_names_do_not_promote_integrated_models(self):
+        for integrated, discrete in (('AMD Radeon RX Vega 11 Graphics', 'AMD Radeon RX 7900 XTX'),
+                                     ('Intel Arc A140V', 'Intel Arc B580')):
+            _, names = parse_hardware(json.dumps({'gpu': [integrated, discrete]}), 'win32')
+            self.assertEqual(names.split('、'), [discrete, integrated])
 
     def test_no_cli_does_not_claim_candidate_is_running(self):
         pet = SimpleNamespace(chat=None)

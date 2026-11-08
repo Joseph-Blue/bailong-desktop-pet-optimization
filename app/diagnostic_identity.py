@@ -24,6 +24,25 @@ def desktop_summary(status):
     return ' · '.join(f'{name}（{count} 个进程）' for name, count in counts.items())
 
 
+def ordered_gpu_names(models):
+    """Prefer recognizable discrete models; keep all adapters in the details."""
+    names = list(dict.fromkeys(name.strip() for name in models if name and name.strip()))
+    def priority(name):
+        lower = name.lower()
+        if any(marker in lower for marker in ('oray', 'aicusb', 'virtual', 'indirect',
+                                              'remote', 'microsoft basic', 'displaylink', 'vmware')):
+            return 2
+        if ('nvidia' in lower or re.search(r'radeon\s+(?:rx\s+\d|pro\b)', lower)
+                or re.search(r'intel.*arc\s+[ab]\d{3}\b', lower)):
+            return 0
+        return 1
+    return sorted(names, key=priority)
+
+
+def gpu_names_text(models):
+    return '、'.join(ordered_gpu_names(models)) or '系统未提供 GPU 型号'
+
+
 def cpu_model():
     if sys.platform == 'darwin':
         lib = C.CDLL('/usr/lib/libSystem.B.dylib', use_errno=True)
@@ -48,18 +67,18 @@ def parse_hardware(output, platform_name):
     if platform_name == 'darwin':
         data = json.loads(output)
         models = [v.get('sppci_model') or v.get('_name') for v in data.get('SPDisplaysDataType', [])]
-        return None, '、'.join(dict.fromkeys(v for v in models if v)) or '系统未提供 GPU 型号'
+        return None, gpu_names_text(models)
     if platform_name == 'win32':
         data = json.loads(output.lstrip('\ufeff'))
         gpu = data.get('gpu') or []
         if isinstance(gpu, str):gpu = [gpu]
-        return data.get('cpu') or '系统未提供 CPU 型号', '、'.join(dict.fromkeys(gpu)) or '系统未提供 GPU 型号'
+        return data.get('cpu') or '系统未提供 CPU 型号', gpu_names_text(gpu)
     models = []
     for line in output.splitlines():
         fields = shlex.split(line)
         if len(fields) >= 4 and fields[1] in ('VGA compatible controller', '3D controller', 'Display controller'):
             models.append(fields[2] + ' ' + fields[3])
-    return None, '、'.join(dict.fromkeys(models)) or '系统未提供 GPU 型号'
+    return None, gpu_names_text(models)
 
 
 class HardwareProbe(QObject):

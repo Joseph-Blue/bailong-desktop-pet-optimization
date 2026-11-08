@@ -2,6 +2,7 @@ import os
 os.environ['QT_QPA_PLATFORM']='offscreen'
 import json,sqlite3,tempfile,time,unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock,patch
 from PySide6.QtCore import QObject
 from PySide6.QtWidgets import QApplication
@@ -18,8 +19,22 @@ class ReaderTests(unittest.TestCase):
     c.execute('INSERT INTO thread_items VALUES(?,?,?,?,?,?)',(actual,'turn',str(i),item['type'],json.dumps(item),i))
    c.commit();c.close();rows=DesktopTaskReader(root).snapshots();self.assertEqual(len(rows),1);r=rows[0]
    self.assertEqual(r['thread'],logical);self.assertEqual(r['actual'],actual)
-   self.assertEqual(r['messages'],['正在核对文件']);self.assertEqual(r['final'],'完成结果');self.assertEqual(len(r['alerts']),1)
+   self.assertEqual(r['messages'],['正在核对文件']);self.assertEqual(r['final'],'完成结果');self.assertEqual(r['alerts'],[])
    self.assertNotIn('PRIVATE',str(rows));self.assertEqual(DesktopTaskReader(root).snapshots({logical}),[])
+   c=sqlite3.connect(root/'thread_history_1.sqlite')
+   c.execute('DELETE FROM thread_items WHERE item_id IN (?,?,?)',('3','4','5'))
+   item={'type':'commandExecution','status':'failed','exitCode':1,'command':'rg app',
+         'aggregatedOutput':"self.assertIn('denied', output) PRIVATE-OUTPUT"}
+   c.execute('INSERT INTO thread_items VALUES(?,?,?,?,?,?)',(actual,'turn','3',item['type'],json.dumps(item),3))
+   c.commit()
+   row=DesktopTaskReader(root).snapshots()[0]
+   self.assertEqual(row['step'],'命令执行失败（返回码 1）\nrg app');self.assertEqual(row['alerts'],[])
+   self.assertNotIn('denied',str(row));self.assertNotIn('PRIVATE',str(row))
+   item={'type':'dynamicToolCall','status':'inProgress','namespace':'functions','tool':'exec','arguments':'PRIVATE'}
+   c.execute('INSERT INTO thread_items VALUES(?,?,?,?,?,?)',(actual,'turn','4',item['type'],json.dumps(item),4))
+   c.commit();c.close()
+   row=DesktopTaskReader(root).snapshots()[0]
+   self.assertEqual(row['step'],'正在调用工具\nfunctions.exec');self.assertNotIn('PRIVATE',str(row))
 
 class FakePet(QObject):
  def __init__(self):
@@ -55,12 +70,15 @@ class SyncTests(unittest.TestCase):
   self.now[0]+=299;self.sync.poll();self.pet.task_progress.assert_called_once()
   self.now[0]+=1;self.sync.poll();self.assertEqual(self.pet.task_progress.call_count,2)
   self.r['messages']=['新的公开进度'];self.sync.poll();self.assertEqual(self.pet.task_progress.call_args.args[1],'新的公开进度')
- def test_same_progress_is_not_reopened_on_other_state_updates(self):
+ def test_tool_changes_display_without_persisting_or_replaying_public_message(self):
   self.sync.poll();self.now[0]+=5;self.r['messages']=['同一段进度'];self.sync.poll()
   count=self.pet.task_progress.call_count
   self.r['step']='正在执行操作';self.sync.poll()
   self.r['step']='正在修改文件';self.sync.poll()
-  self.assertEqual(self.pet.task_progress.call_count,count)
+  self.assertEqual(self.pet.task_progress.call_count,count+2)
+  self.assertEqual(self.pet.task_progress.call_args.args[:2],('工具进度','正在修改文件'))
+  self.assertFalse(any('正在修改文件' in part for signature in self.sync.known['t:a']['seen'] for part in signature))
+  self.sync.poll();self.assertEqual(self.pet.task_progress.call_count,count+2)
  def test_unresolved_warning_repeats_every_five_minutes_until_progress(self):
   self.sync.poll();self.now[0]+=5;self.r['alerts']=[('a','需要你确认')];self.sync.poll()
   self.pet.task_progress.reset_mock()
@@ -74,6 +92,22 @@ class SyncTests(unittest.TestCase):
   self.now[0]+=300;self.sync.poll();self.pet.task_progress.assert_called_once()
   self.r.update(status='completed',error=None,final='处理好了');self.sync.poll()
   self.assertNotIn('warning',self.sync.known['t:a'])
+ def test_transient_failure_never_enters_saved_conversation(self):
+  from chat_backend import HistoryStore
+  with tempfile.TemporaryDirectory() as folder:
+   controller=SimpleNamespace(store=HistoryStore(folder),active=None,running_turn=None,
+                              refresh_list=Mock(),render=Mock())
+   self.pet.chat=controller;self.pet.chat_controller=Mock(return_value=controller)
+   self.sync.history=lambda snapshot,record: DesktopTaskSync.history(self.sync,snapshot,record)
+   self.r['step']='命令执行失败（返回码 1）\nrg app'
+   self.sync.poll()
+   self.assertEqual(self.pet.task_progress.call_args.args[0],'工具进度')
+   self.assertNotIn('warning',self.sync.known['t:a'])
+   self.now[0]+=1;self.r['step']='正在调用工具\nfunctions.exec';self.sync.poll()
+   self.r.update(status='completed',final='已修复',step='');self.sync.poll()
+   saved=controller.store.path.read_text(encoding='utf-8')
+   self.assertNotIn('rg app',saved);self.assertNotIn('functions.exec',saved)
+   self.assertIn('已修复',saved);self.pet.task_completed.assert_called_once()
 
 class DockIntegrationTests(unittest.TestCase):
  @classmethod

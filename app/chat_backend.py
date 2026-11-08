@@ -13,6 +13,7 @@ from datetime import datetime
 
 from quota import find_codex
 from version import VERSION
+from task_activity import tool_activity
 
 PERSONA = ('你是GPT白龙娘桌宠中的白龙娘，是一位温柔、聪明、认真负责的白龙少女。'
            '用自然、轻柔、可爱的中文和用户交流，适度称呼用户为“主人”，偶尔有一点小得意或小傲娇。'
@@ -181,15 +182,9 @@ class CodexSession:
                     self.order.append(item_id)
                 self.items[item_id] = {'text': item.get('text', ''), 'phase': item.get('phase')}
                 self.emit('output', self.transcript())
-            elif kind == 'commandExecution':
-                text = ('正在执行：' if method.endswith('started') else '执行结束：') + item.get('command', '')
-                output = item.get('aggregatedOutput')
-                if output:
-                    text += '\n' + output[-12000:]
-                self.emit('progress', text)
-            elif kind == 'fileChange':
-                paths = [c.get('path', '') for c in item.get('changes', [])]
-                self.emit('progress', '文件更改：' + '、'.join(paths))
+            elif activity := tool_activity(dict(item, status=item.get('status') or
+                                                ('inProgress' if method.endswith('started') else 'completed'))):
+                self.emit('activity', activity)
             elif kind == 'reasoning' and method=='item/completed':
                 # Only the publicly supplied summary; never read raw content.
                 summary=item.get('summary') or []

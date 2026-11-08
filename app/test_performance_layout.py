@@ -5,8 +5,8 @@ import unittest
 from html import unescape
 
 from PySide6.QtCore import QUrl
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QBoxLayout
-from diagnostics import InfoSection, linked_details
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QBoxLayout, QToolButton, QToolTip
+from diagnostics import InfoSection, linked_details, resource_help
 from performance_ui import Columns, configure_window
 
 app = QApplication.instance() or QApplication([])
@@ -33,6 +33,8 @@ class PerformanceLayoutTests(unittest.TestCase):
             self.assertLessEqual(abs(left.width() - right.width()), 1)
             self.assertIn('PID 12', right.text())
             self.assertEqual(right.labels['桌面端'].text(), 'ChatGPT.exe（13 个进程）')
+            self.assertIn('PID 12', right.labels['桌面端'].toolTip())
+            self.assertIn('NVIDIA GeForce RTX 5090 D', right.labels['GPU'].toolTip())
             window.resize(480, 600)
             app.processEvents()
             app.processEvents()
@@ -49,6 +51,31 @@ class PerformanceLayoutTests(unittest.TestCase):
         self.assertTrue(url.isLocalFile())
         self.assertEqual(url.toLocalFile().replace('\\', '/'), 'C:/工具 & test/bin')
         self.assertNotIn('href="https', linked_details('错误：https://example.com'))
+
+    def test_hover_text_preserves_full_literal_content(self):
+        section = InfoSection('硬件')
+        text = '<设备> & 显卡\nC:/some long path/driver.dll'
+        section.set_rows([('GPU', text)], {'GPU': '独显'})
+        tooltip = section.labels['GPU'].toolTip()
+        self.assertIn('&lt;设备&gt; &amp; 显卡<br>', tooltip)
+        self.assertIn('C:/some long path/driver.dll', tooltip)
+        self.assertEqual(section.labels['GPU'].accessibleDescription(), text)
+
+    def test_resource_help_only_on_windows_and_can_open_with_keyboard_action(self):
+        for platform in ('win32', 'darwin', 'linux'):
+            section = InfoSection('资源', resource_help(platform))
+            button = section.findChild(QToolButton, 'resourceHelp')
+            if platform == 'win32':
+                self.assertIsNotNone(button)
+                self.assertIn('运行内存 (RAM)', button.toolTip())
+                self.assertIn('任务管理器', button.toolTip())
+                self.assertIn('工作集（内存）', button.toolTip())
+                section.show();app.processEvents();button.click()
+                self.assertEqual(QToolTip.text(), button.toolTip())
+                QToolTip.hideText()
+            else:
+                self.assertIsNone(button)
+            section.close()
 
 
 if __name__ == '__main__':

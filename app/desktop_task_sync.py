@@ -6,29 +6,11 @@ import re
 import sqlite3
 import time
 from PySide6.QtCore import QObject,QTimer
+from task_activity import LABELS, RUNNING, tool_activity
 
 UUID=re.compile(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
 ACTIVE={'inProgress','running','pending','waitingForApproval','waitingForInput'}
-PUBLIC_TYPES=('agentMessage','commandExecution','fileChange','mcpToolCall','webSearch','imageGeneration','imageView')
-
-def problem_summary(detail,exit_code=None):
-    raw=str(detail or '')
-    try:
-        parsed=json.loads(raw)
-        if isinstance(parsed,dict):raw=str(parsed.get('message') or parsed.get('error') or '')
-    except (ValueError,TypeError):pass
-    lines=[s.strip() for s in raw.splitlines() if s.strip() and not re.search(r'authorization|api.?key|password|token|secret',s,re.I)]
-    matches=[s for s in lines if re.search(r'error|exception|failed|timeout|timed out|denied|no such|错误|失败|不存在|无法|拒绝',s,re.I)]
-    excerpt='\n'.join(matches[-2:])[:500]
-    low=excerpt.lower()
-    if re.search(r'timeout|timed out|超时',low):reason='请求超时'
-    elif re.search(r'connect|network|failed to fetch|name_not_resolved|网络',low):reason='网络连接异常'
-    elif re.search(r'no such file|filenotfound|cannot find|不存在',low):reason='文件或路径不存在'
-    elif re.search(r'no module named|modulenotfound',low):reason='缺少需要的程序模块'
-    elif re.search(r'permission|access.*denied|权限|拒绝',low):reason='权限不足或访问被拒绝'
-    elif re.search(r'assertion|failed \(|test.*fail|检查.*未通过',low):reason='执行检查未通过'
-    else:reason='工具执行异常'+(f'（返回码 {exit_code}）' if exit_code is not None else '')
-    return '主人，这一步没有成功。\n原因：'+reason+('\n错误摘要：'+excerpt if excerpt else '\n暂时没有更详细的错误信息。')+'\n任务是否完成会另外通知你。'
+PUBLIC_TYPES=('agentMessage', *LABELS)
 
 def readonly(path):
     connection=sqlite3.connect(Path(path).resolve().as_uri()+'?mode=ro',uri=True,timeout=.15)
@@ -49,24 +31,32 @@ class DesktopTaskReader:
                 if logical in excluded or actual in excluded:continue
                 rows=history.execute('SELECT turn_id,status,error_json,started_at,completed_at FROM thread_turns WHERE thread_id=? ORDER BY started_at DESC LIMIT 3',(actual,)).fetchall()
                 for turn,status,error,started,completed in rows:
-                    # Project only public messages and tool status, never reasoning,
-                    # tool arguments, successful command output or encrypted content.
-                    items=history.execute("SELECT item_id,item_type,json_extract(item_json,'$.phase'),json_extract(item_json,'$.text'),json_extract(item_json,'$.status'),json_extract(item_json,'$.exitCode'),json_extract(item_json,'$.error'),json_extract(item_json,'$.questions'),CASE WHEN json_extract(item_json,'$.status')='failed' OR json_extract(item_json,'$.exitCode') NOT IN (0) THEN substr(json_extract(item_json,'$.aggregatedOutput'),-2500) ELSE NULL END FROM thread_items WHERE thread_id=? AND turn_id=? AND item_type IN ('agentMessage','commandExecution','fileChange','mcpToolCall','webSearch','imageGeneration','imageView') ORDER BY rollout_ordinal DESC LIMIT 200",(actual,turn)).fetchall()[::-1]
-                    messages=[];final='';alerts=[];steps=[]
-                    for item_id,typ,phase,text,item_status,exit_code,item_error,questions,failed_output in items:
+                    # Project public status fields only, never output, arguments or reasoning.
+                    fields=('phase','text','status','exitCode','questions','command','commandActions',
+                            'changes','namespace','server','tool','query','completed','completedAtMs')
+                    projection=','.join(f"json_extract(item_json,'$.{field}')" for field in fields)
+                    placeholders=','.join('?' for _ in PUBLIC_TYPES)
+                    items=history.execute(f"SELECT item_id,item_type,{projection},json_extract(item_json,'$.error') IS NOT NULL FROM thread_items WHERE thread_id=? AND turn_id=? AND item_type IN ({placeholders}) ORDER BY rollout_ordinal DESC LIMIT 200",(actual,turn,*PUBLIC_TYPES)).fetchall()[::-1]
+                    messages=[];final='';alerts=[];step='';running_step=''
+                    for item_id,typ,*values in items:
+                        item=dict(zip(fields,values));item.update(type=typ,error=bool(values[-1]))
+                        for field in ('commandActions','changes'):
+                            item[field]=json.loads(item[field]) if item[field] else []
+                        phase,text,item_status,questions=(item[key] for key in ('phase','text','status','questions'))
                         if typ=='agentMessage' and phase in ('commentary','final_answer','final',None):
                             if text:
+                                step=''
                                 if phase in ('final_answer','final'):final=str(text)
                                 else:messages.append(str(text));alerts=[]
                             if questions and questions not in ('[]','null'):alerts.append((item_id,'主人，这一步需要你回答或确认，请到 Codex 查看。'))
                         elif typ!='agentMessage':
                             if item_status in ('waitingForApproval','waitingForInput','requiresApproval'):
                                 alerts.append((item_id,'主人，这一步需要你确认权限或补充信息，请到 Codex 查看。'))
-                            elif item_status=='failed' or item_error or (exit_code not in (None,0)):
-                                alerts.append((item_id,problem_summary(item_error or failed_output,exit_code)))
-                            elif item_status in ('inProgress','running'):
-                                steps.append({'commandExecution':'正在执行操作','fileChange':'正在修改文件','mcpToolCall':'正在调用工具','webSearch':'正在查阅资料','imageGeneration':'正在生成图片','imageView':'正在查看图片'}.get(typ,'正在处理'))
-                    result.append(dict(key=actual+':'+turn,thread=logical,actual=actual,turn=turn,title=title,cwd=cwd,status=status,error=error,started=started or 0,completed=completed,messages=messages,final=final,alerts=alerts,step=steps[-1] if steps else ''))
+                            else:
+                                step=tool_activity(item)
+                                if item_status in RUNNING and not item['error'] and item.get('exitCode') in (None,0):
+                                    running_step=step
+                    result.append(dict(key=actual+':'+turn,thread=logical,actual=actual,turn=turn,title=title,cwd=cwd,status=status,error=error,started=started or 0,completed=completed,messages=messages,final=final,alerts=alerts,step=(running_step or step) if status in ACTIVE else ''))
         finally:state.close();history.close()
         return sorted(result,key=lambda r:r['started'])
 
@@ -120,7 +110,7 @@ class DesktopTaskSync(QObject):
             record.update(chat_id=chat['id'],chat=chat,turn=chat['turns'][-1])
             record['seen']={tuple(s) for s in record['turn'].get('syncNotices',[])}
             record['repeat_times']=record['turn'].get('syncRepeatTimes',{})
-        turn=record['turn'];turn['events']=snapshot['messages'][-100:]+[text for _,text in snapshot['alerts']]
+        turn=record['turn'];turn['events']=snapshot['messages'][-100:]
         turn['output']=snapshot['final'];turn['result']=snapshot['final']
         turn['status']='running' if snapshot['status'] in ACTIVE else snapshot['status']
         if snapshot['error']:turn['error']=str(snapshot['error'])
@@ -159,7 +149,7 @@ class DesktopTaskSync(QObject):
                 if warning:self._progress(key,warning[0],warning[1],lambda k=key:self.details(k),repeat=True)
                 if active and self.clock()-record['last_notice']>=300:
                     quiet=self.clock()-record['last_change']>=90
-                    if not warning:self._progress(key,'主人，我还在留意进展…',('已经有一会儿没有新进度了；任务还没有报告完成，你可以到 Codex 看看是否需要处理。' if quiet else (snapshot['messages'][-1] if snapshot['messages'] else (snapshot['step'] or 'Codex 尚未报告完成，我会继续留意最新进展。'))),lambda k=key:self.details(k),repeat=True)
+                    if not warning:self._progress(key,'主人，我还在留意进展…',('已经有一会儿没有新进度了；任务还没有报告完成，你可以到 Codex 看看是否需要处理。' if quiet else (snapshot['messages'][-1] if snapshot['messages'] else '任务仍在执行。')),lambda k=key:self.details(k),repeat=True)
                     record['last_notice']=self.clock()
                 continue
             record['fingerprint']=fingerprint;record['last_change']=self.clock();self.history(snapshot,record)
@@ -170,8 +160,13 @@ class DesktopTaskSync(QObject):
                     record['alerts'].add(aid);record['warning']=('主人，有个情况要告诉你。',text);record['warning_progress']=latest
                     self._progress(key,'主人，有个情况要告诉你。',text,lambda k=key:self.details(k),repeat=True);record['last_notice']=self.clock();record['last_alert']=self.clock()
             if active:
-                if not record.get('warning') and self.clock()-record['started_notice']>=3.5 and self.clock()-record['last_alert']>=8:
-                    text=snapshot['messages'][-1] if snapshot['messages'] else snapshot['step']
+                step=snapshot['step']
+                if not record.get('warning') and step and step!=record.get('tool_step'):
+                    self.pet.task_progress('工具进度',step,lambda k=key:self.details(k))
+                    record['last_notice']=self.clock()
+                record['tool_step']=step
+                if not step and not record.get('warning') and self.clock()-record['started_notice']>=3.5 and self.clock()-record['last_alert']>=8:
+                    text=snapshot['messages'][-1] if snapshot['messages'] else ''
                     if text:self._progress(key,'主人，我忙到这一步啦…',text,lambda k=key:self.details(k));record['last_notice']=self.clock()
             elif not record['finished']:
                 record['finished']=True;self.running.discard(key)

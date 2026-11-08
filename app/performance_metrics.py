@@ -3,6 +3,7 @@ import ctypes as C
 import os
 import sys
 import time
+from pathlib import Path
 from dataclasses import dataclass
 
 import psutil
@@ -119,38 +120,13 @@ class ProcessSnapshot:
     ram: int | None = None
     compressed: int | None = None
     swapins: int | None = None
-    system_swap: int | None = None
-    system_swap_total: int | None = None
-    system_commit: int | None = None
-    system_commit_limit: int | None = None
-    commit_error: str = ''
+    process_swap: int | None = None
+    private_commit: int | None = None
+    process_swap_error: str = ''
     gpu: tuple | None = None
     cpu_error: str = ''
     memory_error: str = ''
-    swap_error: str = ''
     gpu_status: str = '当前平台未接入 GPU 计数'
-
-
-class WindowsPerformanceInfo(C.Structure):
-    # psapi.h PERFORMANCE_INFORMATION; SIZE_T fields count pages, not bytes.
-    _fields_ = [('cb', C.c_uint32)] + [
-        (name, C.c_size_t) for name in (
-            'CommitTotal', 'CommitLimit', 'CommitPeak', 'PhysicalTotal',
-            'PhysicalAvailable', 'SystemCache', 'KernelTotal', 'KernelPaged',
-            'KernelNonpaged', 'PageSize')
-    ] + [(name, C.c_uint32) for name in ('HandleCount', 'ProcessCount', 'ThreadCount')]
-
-
-def windows_commit_memory():
-    library = C.WinDLL('psapi', use_last_error=True)
-    query = library.GetPerformanceInfo
-    query.argtypes = [C.POINTER(WindowsPerformanceInfo), C.c_uint32]
-    query.restype = C.c_int
-    info = WindowsPerformanceInfo()
-    info.cb = C.sizeof(info)
-    if not query(C.byref(info), info.cb):
-        raise C.WinError(C.get_last_error())
-    return info.CommitTotal * info.PageSize, info.CommitLimit * info.PageSize
 
 
 class ProcessStatistics:
@@ -171,20 +147,17 @@ class ProcessStatistics:
             if self.mac:
                 result.ram, result.compressed, result.swapins = self.mac.memory()
             else:
-                result.ram = self.process.memory_info().rss
+                memory = self.process.memory_info()
+                result.ram = memory.rss
+                if self.platform == 'win32':
+                    result.private_commit = memory.private
         except (psutil.Error, OSError) as error:
             result.memory_error = str(error)
-        try:
-            if self.platform == 'win32':
-                result.system_commit, result.system_commit_limit = windows_commit_memory()
-            else:
-                swap = psutil.swap_memory()
-                result.system_swap, result.system_swap_total = swap.used, swap.total
-        except (psutil.Error, OSError) as error:
-            if self.platform == 'win32':
-                result.commit_error = str(error)
-            else:
-                result.swap_error = str(error)
+        if self.platform.startswith('linux'):
+            try:
+                result.process_swap = linux_process_swap(self.process.pid)
+            except OSError as error:
+                result.process_swap_error = str(error)
         if self.mac:
             try:
                 result.gpu = self.mac.gpu()
@@ -203,14 +176,38 @@ def byte_text(value):
         value /= 1024
 
 
-def system_memory_text(snapshot, platform):
+def linux_process_swap(pid):
+    """Current anonymous private swap, excluding shared memory (proc status)."""
+    for line in Path(f'/proc/{pid}/status').read_text().splitlines():
+        if line.startswith('VmSwap:'):
+            fields = line.split()
+            if len(fields) == 3 and fields[1].isdigit() and fields[2] == 'kB':
+                return int(fields[1]) * 1024
+            raise OSError('VmSwap 格式错误')
+    raise OSError('系统未返回 VmSwap')
+
+
+def process_paging_rows(snapshot, platform):
     if platform == 'win32':
-        usage = snapshot.commit_error or (
-            f'{byte_text(snapshot.system_commit)} / {byte_text(snapshot.system_commit_limit)}')
-        return f'系统虚拟内存（已提交 / 上限）{usage}'
-    usage = snapshot.swap_error or (
-        f'{byte_text(snapshot.system_swap)} / {byte_text(snapshot.system_swap_total)}')
-    return f'系统 Swap（已用 / 总量）{usage}'
+        return [('主进程私有提交', snapshot.memory_error or
+                 f'{byte_text(snapshot.private_commit)}（仅供参考）')]
+    if platform == 'darwin':
+        if snapshot.swapins is None:
+            value = snapshot.memory_error or '系统未返回换入计数'
+        elif snapshot.swapins > 0:
+            value = f'有换入记录 · 累计 {byte_text(snapshot.swapins)}'
+        else:
+            value = '暂无换入记录'
+        return [('主进程 Swap 换入', value)]
+    if platform.startswith('linux'):
+        if snapshot.process_swap is None:
+            value = snapshot.process_swap_error or '系统未返回 VmSwap'
+        elif snapshot.process_swap > 0:
+            value = f'当前已换出 {byte_text(snapshot.process_swap)}'
+        else:
+            value = '当前无换出页'
+        return [('主进程 Swap', value)]
+    return []
 
 
 def frame_cache_statistics(pet):

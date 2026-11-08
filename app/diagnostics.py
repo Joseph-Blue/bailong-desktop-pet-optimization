@@ -14,14 +14,24 @@ from PySide6.QtCore import Qt, QTimer, QPointF, QRectF, QUrl
 from PySide6.QtGui import QFont, QPainter, QPainterPath, QPalette, QPen, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
                                QHBoxLayout, QScrollArea, QDialogButtonBox, QCheckBox,
-                               QFrame, QGridLayout, QSizePolicy, QToolButton, QDialog, QTextBrowser)
+                               QFrame, QGridLayout, QSizePolicy, QToolButton, QDialog, QTextBrowser, QToolTip)
 
 from performance_metrics import (PlaybackStatistics, ProcessStatistics,
-                                 byte_text, frame_cache_statistics)
+                                 byte_text, frame_cache_statistics, process_paging_rows)
 from diagnostic_identity import (HardwareProbe, desktop_status, cli_status,
                                  display_architecture, desktop_summary)
 from version import VERSION
 from performance_ui import Columns, configure_window
+
+
+def resource_help(platform_name):
+    if platform_name != 'win32':
+        return ''
+    return ('这里的主进程运行内存 (RAM)，包含桌宠独占的部分，也包含它使用的共享组件。'
+            '任务管理器默认的“内存”列只算独占部分，所以数值会更小。\n\n'
+            '“桌宠运行内存 (RAM)”还加上了 FFmpeg 的占用，共享部分未去重。\n\n'
+            '要对照，请在任务管理器“详细信息”中找到相同 PID，查看“工作集（内存）”列。'
+            '这里每秒更新一次，两边刷新时间不同也会产生差异。')
 
 
 def linked_details(text):
@@ -89,7 +99,7 @@ class ElidedValue(QLabel):
 
 
 class InfoSection(QWidget):
-    def __init__(self, title):
+    def __init__(self, title, help_text=''):
         super().__init__()
         self.heading = title
         self.rows = []
@@ -103,6 +113,17 @@ class InfoSection(QWidget):
         font.setWeight(QFont.Weight.DemiBold)
         name.setFont(font)
         header.addWidget(name)
+        if help_text:
+            help_button = QToolButton()
+            help_button.setObjectName('resourceHelp')
+            help_button.setAutoRaise(True)
+            help_button.setText('?')
+            help_button.setAccessibleName(title + '说明')
+            help_button.setAccessibleDescription(help_text)
+            help_button.setToolTip('<qt>' + escape(help_text).replace('\n\n', '<br><br>') + '</qt>')
+            help_button.clicked.connect(lambda: QToolTip.showText(
+                help_button.mapToGlobal(help_button.rect().bottomLeft()), help_button.toolTip(), help_button))
+            header.addWidget(help_button)
         header.addStretch()
         details = QToolButton()
         details.setAutoRaise(True)
@@ -136,7 +157,8 @@ class InfoSection(QWidget):
                 self.grid.addWidget(label, index, 1)
         for name, value in rows:
             self.labels[name].setText(str((summaries or {}).get(name, value)))
-            self.labels[name].setToolTip(str(value))
+            # Rich-text wrapping handles long paths/names; escaping keeps content literal.
+            self.labels[name].setToolTip('<qt>' + escape(str(value)).replace('\n', '<br>') + '</qt>')
             self.labels[name].setAccessibleDescription(str(value))
 
     def text(self):
@@ -213,7 +235,7 @@ class DiagnosticsWindow(QWidget):
         self.graph = FPSGraph()
         content.addWidget(self.graph)
         self.playback = InfoSection('播放')
-        self.resources = InfoSection('资源')
+        self.resources = InfoSection('资源', resource_help(self.statistics.platform))
         self.identity = InfoSection('硬件与版本')
         self.connections = InfoSection('连接与任务')
         left, right = QWidget(), QWidget()
@@ -290,7 +312,7 @@ class DiagnosticsWindow(QWidget):
         fps, draws = self.frames.sample(current.at)
         self.graph.values.append(fps); self.graph.update()
         elapsed = current.at - self.previous.at
-        cpu = gpu = swap_rate = None
+        cpu = gpu = None
         if current.cpu is not None and self.previous.cpu is not None:
             cpu = (current.cpu - self.previous.cpu) / elapsed * 100
         if current.gpu and self.previous.gpu:
@@ -300,13 +322,10 @@ class DiagnosticsWindow(QWidget):
                 gpu = (nanos - old_nanos) / 1e9 / elapsed * 100
             else:
                 current.gpu_status = '重新建立采样基线'
-        if current.swapins is not None and self.previous.swapins is not None:
-            if current.swapins >= self.previous.swapins:
-                swap_rate = (current.swapins - self.previous.swapins) / elapsed
-        self.update_text(current, fps, draws, cpu, gpu, swap_rate)
+        self.update_text(current, fps, draws, cpu, gpu)
         self.previous = current
 
-    def update_text(self, process, fps=None, draws=None, cpu=None, gpu=None, swap_rate=None):
+    def update_text(self, process, fps=None, draws=None, cpu=None, gpu=None):
         def number(value):
             return '—' if value is None else f'{value:.1f}'
 
@@ -335,31 +354,19 @@ class DiagnosticsWindow(QWidget):
             cpu_text = f'CPU 读取失败：{process.cpu_error}'
         ram = byte_text(process.ram) if not process.memory_error else process.memory_error
         gpu_text = f'{gpu:.2f}%' if gpu is not None else process.gpu_status
-        swapins = (f'累计 {byte_text(process.swapins)}' if process.swapins else '未观察到换入')
-        if process.swapins is None:
-            swapins = process.memory_error or ('系统未返回进程换入计数' if self.statistics.mac
-                                              else '当前平台未接入进程换入计数')
-        if swap_rate is not None:
-            swapins += f' · {byte_text(swap_rate)}/s'
         decoder_text, decoder_ram = self.decoder_text(buffered['pid'])
         total_ram = (process.ram + decoder_ram
                      if process.ram is not None and decoder_ram is not None else None)
         resources = [
-            ('桌宠 RAM', byte_text(total_ram)),
-            ('主进程 RAM', ram),
-            ('FFmpeg RAM', byte_text(decoder_ram)),
+            ('桌宠运行内存 (RAM)', byte_text(total_ram)),
+            ('主进程运行内存 (RAM)', ram),
+            ('FFmpeg 运行内存 (RAM)', byte_text(decoder_ram)),
             ('主进程 CPU', cpu_text),
             ('FFmpeg', decoder_text)]
         if self.statistics.mac:
             resources += [('GPU（应用组）', gpu_text),
-                          ('进程压缩内存', byte_text(process.compressed)),
-                          ('进程换入', swapins)]
-        if self.statistics.platform == 'win32':
-            resources.append(('虚拟内存（系统）', process.commit_error or
-                f'{byte_text(process.system_commit)} / {byte_text(process.system_commit_limit)}（已提交 / 上限）'))
-        else:
-            resources.append(('Swap（系统）', process.swap_error or
-                f'{byte_text(process.system_swap)} / {byte_text(process.system_swap_total)}（已用 / 总量）'))
+                          ('压缩运行内存 (RAM)', byte_text(process.compressed))]
+        resources.extend(process_paging_rows(process, self.statistics.platform))
         resources.append(('帧缓存估算', f'{byte_text(size)} · {frames} 帧'))
         if buffered['preloadWhole']:
             resources.append(('整段预加载', f'{buffered["buffered"]} / {count if count is not None else "—"} 帧'))
@@ -386,7 +393,7 @@ class DiagnosticsWindow(QWidget):
             ('进程', f'{os.path.basename(sys.executable)} · PID {os.getpid()}'),
             ('CPU', f'{self.hardware.cpu.strip()} · {self.statistics.cores} 个逻辑核心'),
             ('GPU', self.hardware.gpu),
-            ('系统', platform.platform())])
+            ('系统', platform.platform())], {'GPU': self.hardware.gpu.split('、')[0]})
 
     def decoder_text(self,pid):
         if pid is None:

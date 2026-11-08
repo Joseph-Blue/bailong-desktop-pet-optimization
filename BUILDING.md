@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.10`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.11`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
 
 ## 所有平台先准备
 
@@ -74,9 +74,9 @@ winget install --id Python.Python.3.13 --exact
 
 维护此脚本时保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 可能将无 BOM 的 UTF-8 脚本按系统代码页解读，导致中文错误或解析失败。脚本兼容两种 PowerShell 不代表支持旧版 Windows；Python、Qt 与 FFmpeg 的系统及架构要求仍需满足。
 
-虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.10/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.11/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.10-windows-x64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。ZIP 是本地测试包，不自动上传或创建 Release，也不调用旧脚本生成历史发行文案及许可证汇总。
+在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.11-windows-x64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。ZIP 是本地测试包，不自动上传或创建 Release，也不调用旧脚本生成历史发行文案及许可证汇总。
 
 `work/build_windows.py` 现在直接整理完整测试目录。原作者的 `work/build_release.py` 保留作历史发行包整理参考，以上入口不调用它，也不生成 GitHub Release。
 
@@ -194,13 +194,15 @@ Windows 使用 `work/hooks/windows/hook-PySide6.QtGui.py`，在依赖分析前�
 
 ## 性能统计范围
 
-“桌宠 RAM”只包括主进程与 FFmpeg，macOS 两项均为物理占用，Windows／Linux 为 RSS。Codex app-server 及其启动的 Node／Python 等工具进程不计入；它不是整个进程树合计。CPU 行分别标明主进程与解码进程，GPU 保留应用组口径，不能将不同范围的数值混作同一总量。
+“桌宠运行内存 (RAM)”只包括主进程与 FFmpeg，macOS 两项均为物理占用，Windows／Linux 为 RSS。Codex app-server 及其启动的 Node／Python 等工具进程不计入；它不是整个进程树合计。CPU 行分别标明主进程与解码进程，GPU 保留应用组口径，不能将不同范围的数值混作同一总量。
 
-Windows 显示系统虚拟内存已提交量／上限，Linux 与 macOS 显示系统 Swap 已用／总量。GPU 使用率、进程压缩内存与换入计数仅在 macOS 显示。
+换页数据只统计主进程。Windows 显示私有提交量并标“仅供参考”；私有提交量不表示实际写入页文件的数量。Linux 读取 `/proc/PID/status` 的 `VmSwap`，显示当前匿名私有换出量，不含共享运行内存 (RAM) 的换出页。macOS 显示累计 Swap 换入量，零表示暂无换入记录，不代表从未换出。GPU 使用率和压缩运行内存 (RAM) 仅在 macOS 显示。
 
-浮窗显示 CPU／GPU 型号、桌面端与内置 CLI 的 PID／路径／会话状态。硬件查询仅在窗口打开时发起一次，关闭取消；Windows 通过系统 PowerShell 的 CIM 查询，Linux GPU 型号通过 lspci 获取（发行版 pciutils 包）。macOS 按应用 Bundle ID 识别桌面端，Windows 当前识别 Microsoft Store 安装路径，Linux 明确显示尚未接入桌面端识别。候选 CLI 路径与实际运行进程分开标注，不为统计发起 Codex 请求。
+浮窗显示 CPU／GPU 型号，摘要按型号优先显示已识别的独显，其他适配器保留在详情与悬停提示中；这不代表渲染设备选择。长字段悬停显示全文。浮窗还显示桌面端与内置 CLI 的 PID／路径／会话状态。硬件查询仅在窗口打开时发起一次，关闭取消；Windows 通过系统 PowerShell 的 CIM 查询，Linux GPU 型号通过 lspci 获取（发行版 pciutils 包）。macOS 按应用 Bundle ID 识别桌面端，Windows 当前识别 Microsoft Store 安装路径，Linux 明确显示尚未接入桌面端识别。候选 CLI 路径与实际运行进程分开标注，不为统计发起 Codex 请求。
 
 ## 实机验收记录
+
+2026-11-08 · opt.11：61 项相关测试通过，覆盖工具状态投影、失败后继续执行、工具信息不写入历史、独显排序、主进程换页指标和 Windows 专属资源提示。性能窗口已检查 150% 缩放下的浅色、深色及大字体窄窗口离屏预览；Windows 运行内存 (RAM) 与私有提交量读取已在本机验证。Linux／macOS 指标使用模拟数据测试，本轮未重新打包或进行这两个平台的实机验收。
 
 当前：macOS Apple Silicon 构建已执行；Windows、Linux 三类发行版尚未实机构建／运行。脚本解析检查和打包通过不等于运行验收。请为每台机器记录：
 

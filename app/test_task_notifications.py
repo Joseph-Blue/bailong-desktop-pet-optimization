@@ -48,7 +48,10 @@ class UiTests(unittest.TestCase):
         app.processEvents();self.assertGreater(view.verticalScrollBar().maximum(),0)
         button=next(b for b in p.bubble.findChildren(QPushButton) if b.text()=='详情')
         button.click();self.assertTrue(c.window.isVisible())
-        p.started=time.monotonic()-5;p.animate();self.assertEqual(p.mode,'idle')
+        # Advance after the first decoded frame; notification tests do not wait for FFmpeg.
+        p.loading=False;p.started=time.monotonic()-p.current['durationMs']/1000-1
+        with patch.object(p.stream,'take',return_value=None):p.animate()
+        self.assertEqual(p.mode,'idle')
     def test_failure_has_no_success_sound_or_animation(self):
         c=self.c;p=self.pet
         c.active=c.store.new(self.temp.name);c.running_chat=c.active
@@ -56,5 +59,22 @@ class UiTests(unittest.TestCase):
         c.active['turns'].append(c.running_turn)
         with patch.object(p,'task_completed') as success,patch.object(p,'play_click_sound') as sound:
             c.failed('未完成',False);success.assert_not_called();sound.assert_not_called()
+
+    def test_tool_activity_is_visible_but_never_saved_as_history(self):
+        c=self.c;p=self.pet
+        c.active=c.store.new(self.temp.name);c.running_chat=c.active
+        c.running_turn={'prompt':'工具测试','created':'now','status':'running','output':'','events':[]}
+        c.active['turns'].append(c.running_turn)
+        c.receive('activity','命令执行失败（返回码 1）\nrg app');c.preview_reply();c.render();c.flush()
+        self.assertIn('命令执行失败',c.window.view.toPlainText())
+        self.assertNotIn('rg app',c.store.path.read_text(encoding='utf-8'))
+        self.assertEqual(c.running_turn['status'],'running')
+        c.receive('activity','正在调用工具\nfunctions.exec');c.preview_reply();c.render()
+        self.assertIn('functions.exec',c.window.view.toPlainText())
+        self.assertNotIn('rg app',c.window.view.toPlainText())
+        with patch.object(p,'task_completed'):
+            c.completed({'threadId':'test','text':'已修复','transcript':'已修复'})
+        self.assertNotIn('functions.exec',c.store.path.read_text(encoding='utf-8'))
+        self.assertNotIn('工具进度',c.window.view.toPlainText())
 
 if __name__=='__main__':unittest.main()

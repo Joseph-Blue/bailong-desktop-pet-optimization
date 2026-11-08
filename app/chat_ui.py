@@ -178,6 +178,7 @@ class ChatController(QObject):
         self.preview_timer=QTimer(self);self.preview_timer.setInterval(180);self.preview_timer.setSingleShot(True)
         self.preview_timer.timeout.connect(self.preview_reply)
         self.latest_preview_kind='output'
+        self.activity=''
         self.window.selected.connect(self.select)
         self.window.new_chat.connect(self.new_chat)
         self.window.codex_button.clicked.connect(self.open_codex)
@@ -286,16 +287,22 @@ class ChatController(QObject):
         if not self.running_turn:return
         if kind=='thread':self.running_chat['threadId']=value
         elif kind=='output':
+            self.activity=''
             self.running_turn['output']=value
             self.latest_preview_kind='output'
             if not self.preview_timer.isActive():self.preview_timer.start()
         elif kind in ('summary','summary_update'):
+            self.activity=''
             self.running_turn['summary']=str(value) if kind=='summary_update' else self.running_turn.get('summary','')+str(value)
             self.latest_preview_kind='summary'
             if not self.preview_timer.isActive():self.preview_timer.start()
         elif kind=='progress':
             events=self.running_turn['events'];events.append(str(value));self.running_turn['events']=events[-250:]
             self.latest_preview_kind='progress'
+            if not self.preview_timer.isActive():self.preview_timer.start()
+        elif kind=='activity':
+            self.activity=str(value)
+            self.latest_preview_kind='activity'
             if not self.preview_timer.isActive():self.preview_timer.start()
         self.dirty=True
         if not self.render_timer.isActive():self.render_timer.start()
@@ -305,6 +312,8 @@ class ChatController(QObject):
         kind=self.latest_preview_kind
         if kind=='summary':
             text=self.running_turn.get('summary','');title='主人，我正在理清思路…（公开摘要）'
+        elif kind=='activity':
+            text=self.activity;title='工具进度'
         elif kind=='progress':
             text='\n\n'.join(self.running_turn.get('events',[])[-2:]);title='主人，我忙到这一步啦…'
         else:
@@ -315,6 +324,7 @@ class ChatController(QObject):
 
     def finish(self):
         self.preview_timer.stop()
+        self.activity=''
         self.pet.task_finished()
         self.running_turn=None;self.running_chat=None
         self.composer.busy(False);self.window.busy(False)
@@ -409,6 +419,8 @@ class ChatController(QObject):
             content.append(block('主人 · '+turn['created'],turn['prompt'],'#6f4697'))
             if turn.get('summary'):content.append(block('思考摘要（公开）',turn['summary']))
             if turn.get('events'):content.append(block('执行记录','\n\n'.join(turn['events'])))
+            if turn is self.running_turn and self.activity:
+                content.append(block('工具进度', self.activity))
             output=turn.get('output','')
             result=turn.get('result','')
             if turn['status']=='completed' and result and output.endswith(result):
