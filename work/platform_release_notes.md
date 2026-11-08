@@ -13,7 +13,7 @@ Windows／macOS 独立构建的完整运行包，包含 Python/Qt、FFmpeg、完
 ## 运行
 
 - Windows：运行 `BailongPet/BailongPet.exe`。
-- macOS：运行 `BailongPet.app`。应用采用本地 ad-hoc 签名，未做 Apple 公证。
+- macOS：运行 `BailongPet.app`。macOS App 使用本地签名，未做 Apple 公证。如首次打开被系统拦截，在“系统设置 → 隐私与安全性”选择“仍要打开”，参见 [Apple 操作说明](https://support.apple.com/zh-cn/102445)。
 - Codex 对话、额度与同步功能使用用户自己的 Codex 安装和登录；运行包不包含账号或聊天记录。
 
 ## 本轮变化与说明
