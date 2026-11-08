@@ -9,6 +9,7 @@ from quota import read_quota, quota_windows
 from version import VERSION, BASE_VERSION, BRANCH
 from movement import plan_movement, movement_fraction
 from frame_buffer import FrameBuffer
+from performance_preferences import read_performance_preferences, decode_size, fps_cap
 
 from platform_support import resource_root,state_root,configure_mac_window
 ROOT=resource_root()
@@ -139,7 +140,6 @@ class Pet(QWidget):
         self.source_index=0;self.display_item=None;self.reference_frame=None;self.loading=False
         self.stream=FrameBuffer()
         QApplication.instance().aboutToQuit.connect(self.stream.close)
-        self.frame_size=min(512,max(256,round(256*max(s.devicePixelRatio() for s in QApplication.screens()))))
         self.transition=None
         self.bubble=Bubble();self.generation=0;self.worker=None;self.quota_inflight=False;self.dragging=False;self.last_click=None
         self.bubble.dismiss_requested.connect(self.dismiss_bubble)
@@ -148,11 +148,8 @@ class Pet(QWidget):
         self.task_active=False
         self.manual_hidden=False;self.fullscreen_hidden=False;self.hidden_since=None
         self.settings=QSettings('BailongPet','DesktopPet')
-        self.resolution=self.settings.value('animationResolution',0,type=int)
-        if self.resolution not in (0,720,512,384,256):self.resolution=0
-        if self.resolution:self.frame_size=self.resolution
-        self.buffer_capacity=self.settings.value('animationBufferFrames',24,type=int)
-        if not 6<=self.buffer_capacity<=240:self.buffer_capacity=24
+        self.resolution,self.buffer_capacity,self.fps_limit,self.preload_whole=read_performance_preferences(self.settings)
+        self.frame_size=decode_size(self.resolution,max(s.devicePixelRatio() for s in QApplication.screens()))
         self.bubble_percent=max(50,min(150,self.settings.value('bubblePercent',100,type=int)))
         self.task_bubbles_disabled=self.settings.value('taskBubblesDisabled',False,type=bool)
         self.sound_disabled=self.settings.value('soundDisabled',False,type=bool)
@@ -404,7 +401,8 @@ class Pet(QWidget):
         if self.dock_edge and mode!='idle':return
         if self.movement_plan is not None:self.finish_movement()
         self.current=item;self.mode=mode;self.source_index=0;self.loading=True
-        self.stream.play(self.asset_path(item),self.frame_size,item['durationMs']/1000,self.buffer_capacity)
+        self.stream.play(self.asset_path(item),self.frame_size,item['durationMs']/1000,self.buffer_capacity,
+                         fps=fps_cap(self.fps_limit),preload_whole=self.preload_whole)
         self.started=time.monotonic()
         if not self.desktop_hidden():self.tick.start()
         if getattr(self,'hidden_since',None) is not None:self.hidden_since=self.started
@@ -693,11 +691,14 @@ class Pet(QWidget):
         if not hasattr(self,'performance_settings'):
             self.performance_settings=PerformanceSettings(self)
         self.performance_settings.showNormal();self.performance_settings.raise_();self.performance_settings.activateWindow()
-    def apply_performance(self,resolution,capacity):
-        self.resolution=resolution;self.buffer_capacity=capacity
+    def apply_performance(self,resolution,capacity,fps_limit,preload_whole):
+        self.resolution=resolution;self.buffer_capacity=capacity;self.fps_limit=fps_limit
+        self.preload_whole=preload_whole
         self.settings.setValue('animationResolution',resolution)
         self.settings.setValue('animationBufferFrames',capacity)
-        self.frame_size=resolution or min(512,max(256,round(256*max(s.devicePixelRatio() for s in QApplication.screens()))))
+        self.settings.setValue('animationFPSLimit',fps_limit)
+        self.settings.setValue('preloadWholeAnimation',preload_whole)
+        self.frame_size=decode_size(resolution,max(s.devicePixelRatio() for s in QApplication.screens()))
         route=self.movement_plan
         self.play(self.current,self.mode)
         if route:self.movement_plan=(QPoint(self.pos()),route[1])
@@ -705,8 +706,7 @@ class Pet(QWidget):
         QMessageBox.about(self,'关于白龙桌宠',
             '<h3>GPT白龙娘动态桌宠</h3>'
             f'<p>分支版本：{VERSION}<br>原作者基线：v{BASE_VERSION}<br>分支：{BRANCH}</p>'
-            '<p>反哺迭代：Qt 性能统计与 macOS 本机构建。<br>'
-            '技术栈：Python · PySide6 / Qt · FFmpeg<br>角色素材：原作者 v0.5.1 素材</p>'
+            '<p>技术栈：Python · PySide6 / Qt · FFmpeg<br>角色素材：原作者 v0.5.1 素材</p>'
             '<p><a href="https://github.com/jingh12312-rgb/bailong-desktop-pet">原作者项目</a></p>')
     def set_sound_disabled(self,disabled):
         self.sound_disabled=bool(disabled);self.settings.setValue('soundDisabled',self.sound_disabled)

@@ -2,12 +2,13 @@
 
 基于 [jingh12312-rgb/bailong-desktop-pet](https://github.com/jingh12312-rgb/bailong-desktop-pet) 的 `b102e73 / v0.5.1`，保留 Python + PySide6 + FFmpeg 和作者原始素材。与独立 Swift/AppKit 项目分开维护。
 
-当前版本 **0.5.1-opt.8**，分支 **joseph/optimization**。作者版本号保留，`opt.N` 是本分支的 SemVer 预发布迭代号。私人源码仓库：[Joseph-Blue/bailong-desktop-pet-optimization](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization)。**本仓库不提供 Release，也不上传构建产物或动画素材。**
+当前版本 **0.5.1-opt.9**，分支 **joseph/optimization**。作者版本号保留，`opt.N` 是本分支的 SemVer 预发布迭代号。私人源码仓库：[Joseph-Blue/bailong-desktop-pet-optimization](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization)。**本仓库不提供 Release，也不上传构建产物或动画素材。**
 
 ## 本分支的变化
 
-- 动画按需解码，默认最多预读当前动作 24 帧，取消启动时全素材常驻；保留 FFmpeg 的 VP9 透明解码。
-- 性能设置支持画质与缓冲帧数；性能统计提供 FPS、CPU、CPU／GPU 型号和桌宠运行内存 (RAM) 分项与合计。内存范围为主进程 + FFmpeg，不含 Codex 及其工具子进程；桌面端与内置 CLI 的状态另列。
+- 动画按需解码，各平台默认 512×512、12 帧缓冲、满帧；帧率档位与 Swift 版一致，为满帧／20／15 FPS，保持动作时长和 VP9 透明度。当前素材满帧为 24 或 30 FPS。
+- 缓冲支持输入框与 6～240 帧滑条；整段动画预加载默认关闭，开启时仅预加载当前动作，保留并禁用缓冲设置。
+- 性能设置和统计采用双栏布局，窄窗口自动上下排列。统计显示 FPS、CPU、CPU／GPU 型号和桌宠 RAM；Windows 显示系统虚拟内存，Linux／macOS 显示 Swap。桌宠 RAM 为主进程与 FFmpeg 合计。
 - macOS 窗口置顶、跨 Space、独立历史目录、Codex 可执行文件定位及 Command 提示修正。
 - 桌宠自有对话与 Codex 只读同步记录区分，避免误恢复外部占用的会话。
 - Windows、macOS 和三类 Linux 构建入口随源码维护。
@@ -20,13 +21,15 @@
 
 | 平台 | 本机命令 |
 | --- | --- |
-| Windows · PowerShell 7+ | `./build-windows.ps1` |
+| Windows · PowerShell 5.1／7+ | `./build-windows.ps1` |
 | macOS · Bash | `PYTHON=python3.11 bash build-macos.sh` |
 | Debian / Ubuntu | `bash build-linux-debian.sh --install-deps` |
 | Fedora / RHEL 系 | `bash build-linux-fedora.sh --install-deps` |
 | Arch 系 | `bash build-linux-arch.sh --install-deps` |
 
-各平台构建自己的架构，不能在 Mac 生成 Windows／Linux 程序。脚本默认创建独立虚拟环境、安装 Python 依赖并打包；Linux 的 `--install-deps` 才会安装系统依赖。可指定 FFmpeg，或使用构建依赖提供的本机版本，详见构建文档。
+各平台构建自己的架构，不能在 Mac 生成 Windows／Linux 程序。脚本默认创建独立虚拟环境并打包；Windows 会先检查 Python、pip 和锁定依赖，仅在缺失、版本不符或存在依赖冲突时补装。Linux 的 `--install-deps` 才会安装系统依赖。可指定 FFmpeg，或使用构建依赖提供的本机版本，详见构建文档。
+
+Windows 使用 `./build-windows.ps1 -Zip` 可同时生成完整本地 ZIP 和 SHA256；依赖齐全后可加 `-SkipInstall`。不必安装 PowerShell 7，也不必手工准备原作的 `.build-tools` 或旧 FFmpeg 路径。运行已构建的完整包不需要另装 Python／PyInstaller。所需环境、原作步骤对应关系与手动命令见 [BUILDING.md](BUILDING.md)。
 
 macOS Apple Silicon 已执行构建；Windows／Linux 脚本待对应实机验证。Linux 的全屏自动检测、跟随启动尚未接入，原生 Wayland 窗口行为也未验收。
 

@@ -120,6 +120,10 @@ class ProcessSnapshot:
     compressed: int | None = None
     swapins: int | None = None
     system_swap: int | None = None
+    system_swap_total: int | None = None
+    system_commit: int | None = None
+    system_commit_limit: int | None = None
+    commit_error: str = ''
     gpu: tuple | None = None
     cpu_error: str = ''
     memory_error: str = ''
@@ -127,8 +131,31 @@ class ProcessSnapshot:
     gpu_status: str = '当前平台未接入 GPU 计数'
 
 
+class WindowsPerformanceInfo(C.Structure):
+    # psapi.h PERFORMANCE_INFORMATION; SIZE_T fields count pages, not bytes.
+    _fields_ = [('cb', C.c_uint32)] + [
+        (name, C.c_size_t) for name in (
+            'CommitTotal', 'CommitLimit', 'CommitPeak', 'PhysicalTotal',
+            'PhysicalAvailable', 'SystemCache', 'KernelTotal', 'KernelPaged',
+            'KernelNonpaged', 'PageSize')
+    ] + [(name, C.c_uint32) for name in ('HandleCount', 'ProcessCount', 'ThreadCount')]
+
+
+def windows_commit_memory():
+    library = C.WinDLL('psapi', use_last_error=True)
+    query = library.GetPerformanceInfo
+    query.argtypes = [C.POINTER(WindowsPerformanceInfo), C.c_uint32]
+    query.restype = C.c_int
+    info = WindowsPerformanceInfo()
+    info.cb = C.sizeof(info)
+    if not query(C.byref(info), info.cb):
+        raise C.WinError(C.get_last_error())
+    return info.CommitTotal * info.PageSize, info.CommitLimit * info.PageSize
+
+
 class ProcessStatistics:
     def __init__(self):
+        self.platform = sys.platform
         self.process = psutil.Process()
         self.cores = psutil.cpu_count() or 1
         self.mac = MacCounters() if sys.platform == 'darwin' else None
@@ -148,9 +175,16 @@ class ProcessStatistics:
         except (psutil.Error, OSError) as error:
             result.memory_error = str(error)
         try:
-            result.system_swap = psutil.swap_memory().used
+            if self.platform == 'win32':
+                result.system_commit, result.system_commit_limit = windows_commit_memory()
+            else:
+                swap = psutil.swap_memory()
+                result.system_swap, result.system_swap_total = swap.used, swap.total
         except (psutil.Error, OSError) as error:
-            result.swap_error = str(error)
+            if self.platform == 'win32':
+                result.commit_error = str(error)
+            else:
+                result.swap_error = str(error)
         if self.mac:
             try:
                 result.gpu = self.mac.gpu()
@@ -167,6 +201,16 @@ def byte_text(value):
         if value < 1024 or unit == 'TiB':
             return f'{value:.1f} {unit}'
         value /= 1024
+
+
+def system_memory_text(snapshot, platform):
+    if platform == 'win32':
+        usage = snapshot.commit_error or (
+            f'{byte_text(snapshot.system_commit)} / {byte_text(snapshot.system_commit_limit)}')
+        return f'系统虚拟内存（已提交 / 上限）{usage}'
+    usage = snapshot.swap_error or (
+        f'{byte_text(snapshot.system_swap)} / {byte_text(snapshot.system_swap_total)}')
+    return f'系统 Swap（已用 / 总量）{usage}'
 
 
 def frame_cache_statistics(pet):

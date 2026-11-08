@@ -1,45 +1,159 @@
-"""Small native Qt form for the bounded decoder's two controls."""
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QDialog,QVBoxLayout,QFormLayout,QHBoxLayout,QLabel,
-                               QComboBox,QSpinBox,QPushButton,QApplication)
+"""Cross-platform performance controls using the system font and palette."""
+from PySide6.QtCore import Qt, QRectF
+from PySide6.QtGui import QPainter, QPalette
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
+                               QComboBox, QLineEdit, QSlider, QCheckBox, QDialogButtonBox,
+                               QWidget, QGroupBox, QStyle, QStyleOptionFocusRect)
+from performance_ui import Columns, configure_window
+from performance_preferences import (MIN_BUFFER_FRAMES, MAX_BUFFER_FRAMES,
+                                     DEFAULT_RESOLUTION, DEFAULT_BUFFER_FRAMES, DEFAULT_FPS_LIMIT)
+
+
+class ToggleSwitch(QCheckBox):
+    def __init__(self):
+        super().__init__()
+        self.setFixedSize(46, 26)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def hitButton(self, position):
+        return self.rect().contains(position)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        palette = self.palette()
+        painter.setBrush(palette.color(QPalette.ColorRole.Highlight if self.isChecked()
+                                       else QPalette.ColorRole.Mid))
+        painter.drawRoundedRect(QRectF(3, 3, 40, 20), 10, 10)
+        painter.setBrush(Qt.GlobalColor.white)
+        painter.drawEllipse(QRectF(25 if self.isChecked() else 5, 5, 16, 16))
+        if self.hasFocus():
+            option = QStyleOptionFocusRect()
+            option.initFrom(self)
+            self.style().drawPrimitive(QStyle.PrimitiveElement.PE_FrameFocusRect, option, painter, self)
 
 
 class PerformanceSettings(QDialog):
-    def __init__(self,pet):
-        super().__init__(pet,Qt.WindowType.Window)
-        self.pet=pet
-        self.setWindowTitle('性能设置');self.resize(440,250)
-        layout=QVBoxLayout(self);layout.setContentsMargins(18,16,18,16);layout.setSpacing(12)
-        form=QFormLayout()
-        self.quality=QComboBox()
-        for label,value in (('跟随屏幕（原设置，最高 512×512）',0),('原画 720×720',720),
-                            ('较高 512×512',512),('中 384×384',384),('低 256×256',256)):
-            self.quality.addItem(label,value)
+    def __init__(self, pet):
+        super().__init__(pet, Qt.WindowType.Window)
+        configure_window(self)
+        self.pet = pet
+        self.setWindowTitle('性能设置')
+        self.resize(840, 270)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(12)
+        playback = QGroupBox('播放')
+        buffer = QGroupBox('预加载')
+        forms = [QFormLayout(group) for group in (playback, buffer)]
+        for form in forms:
+            form.setVerticalSpacing(14)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+        self.quality = QComboBox()
+        for label, value in (('原画 720×720', 720), ('较高 512×512', 512),
+                             ('中 384×384', 384), ('低 256×256', 256), ('跟随屏幕', 0)):
+            self.quality.addItem(label, value)
         self.quality.setCurrentIndex(self.quality.findData(pet.resolution))
-        self.capacity=QSpinBox();self.capacity.setRange(6,240);self.capacity.setSuffix(' 帧')
-        self.capacity.setValue(pet.buffer_capacity)
-        form.addRow('解码分辨率',self.quality);form.addRow('预加载帧数',self.capacity)
-        layout.addLayout(form)
-        self.estimate=QLabel();self.estimate.setWordWrap(True);layout.addWidget(self.estimate)
-        note=QLabel('仅预读当前动作；保留素材帧率。隐藏桌宠时暂停解码。\n应用后重新开始当前动作，设置自动保存。')
-        note.setWordWrap(True);layout.addWidget(note)
+        self.fps = QComboBox()
+        for label, value in (('满帧 (≥ 24 FPS)', 'full'), ('20 FPS', '20'), ('15 FPS', '15')):
+            self.fps.addItem(label, value)
+        self.fps.setCurrentIndex(self.fps.findData(pet.fps_limit))
+        self.capacity = QLineEdit(str(pet.buffer_capacity))
+        self.capacity.setFixedWidth(self.fontMetrics().horizontalAdvance('0000') + 16)
+        self.capacity.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.capacity.setAccessibleName('输入动画缓冲帧数')
+        self.buffer_slider = QSlider(Qt.Orientation.Horizontal)
+        self.buffer_slider.setRange(MIN_BUFFER_FRAMES, MAX_BUFFER_FRAMES)
+        self.buffer_slider.setSingleStep(1)
+        self.buffer_slider.setPageStep(6)
+        self.buffer_slider.setTickInterval(39)
+        self.buffer_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.buffer_slider.setValue(pet.buffer_capacity)
+        self.buffer_slider.setAccessibleName('动画缓冲帧数')
+        track = QVBoxLayout()
+        track.setSpacing(0)
+        track.addWidget(self.buffer_slider)
+        limits = QHBoxLayout()
+        limits.addWidget(QLabel('6 帧'))
+        limits.addStretch()
+        limits.addWidget(QLabel('240 帧'))
+        track.addLayout(limits)
+        self.buffer_controls = QWidget()
+        controls = QHBoxLayout(self.buffer_controls)
+        controls.setContentsMargins(0, 0, 0, 0)
+        controls.setSpacing(8)
+        controls.addWidget(self.capacity)
+        controls.addWidget(QLabel('帧'))
+        controls.addLayout(track, 1)
+        self.preload = ToggleSwitch()
+        self.preload.setAccessibleName('整段动画预加载（不推荐）')
+        self.preload.setChecked(pet.preload_whole)
+        self.quality.setAccessibleName('分辨率')
+        self.fps.setAccessibleName('运行帧率')
+        forms[0].addRow('分辨率', self.quality)
+        forms[0].addRow('运行帧率', self.fps)
+        forms[1].addRow('预加载帧数', self.buffer_controls)
+        toggle_row = QHBoxLayout()
+        toggle_row.addWidget(QLabel('整段动画预加载（不推荐）'))
+        toggle_row.addStretch()
+        toggle_row.addWidget(self.preload)
+        forms[1].addRow(toggle_row)
+        self.columns = Columns(playback, buffer)
+        layout.addWidget(self.columns)
         layout.addStretch()
-        row=QHBoxLayout();row.addStretch()
-        close=QPushButton('关闭');close.clicked.connect(self.close)
-        self.apply_button=QPushButton('应用');self.apply_button.clicked.connect(self.apply)
-        row.addWidget(close);row.addWidget(self.apply_button);layout.addLayout(row)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Apply |
+                                   QDialogButtonBox.StandardButton.RestoreDefaults)
+        self.apply_button = buttons.button(QDialogButtonBox.StandardButton.Apply)
+        self.apply_button.setText('应用')
+        self.apply_button.clicked.connect(self.apply)
+        reset = buttons.button(QDialogButtonBox.StandardButton.RestoreDefaults)
+        reset.setText('恢复默认')
+        reset.clicked.connect(self.reset_defaults)
+        layout.addWidget(buttons)
+        for before, after in zip((self.quality, self.fps, self.capacity, self.buffer_slider, self.preload, reset),
+                                 (self.fps, self.capacity, self.buffer_slider, self.preload, reset, self.apply_button)):
+            self.setTabOrder(before, after)
         self.quality.currentIndexChanged.connect(self.refresh)
-        self.capacity.valueChanged.connect(self.refresh)
+        self.fps.currentIndexChanged.connect(self.refresh)
+        self.capacity.editingFinished.connect(self.commit_capacity)
+        self.capacity.textChanged.connect(self.refresh)
+        self.buffer_slider.valueChanged.connect(self.slider_changed)
+        self.preload.toggled.connect(self.refresh)
         self.refresh()
+
+    def capacity_value(self):
+        try:
+            value = int(self.capacity.text().strip())
+        except ValueError:
+            return DEFAULT_BUFFER_FRAMES
+        return value if MIN_BUFFER_FRAMES <= value <= MAX_BUFFER_FRAMES else DEFAULT_BUFFER_FRAMES
+
+    def commit_capacity(self):
+        value = self.capacity_value()
+        self.capacity.setText(str(value))
+        self.buffer_slider.setValue(value)
+
+    def slider_changed(self, value):
+        self.capacity.setText(str(value))
 
     def refresh(self):
-        size=self.quality.currentData() or min(512,max(256,round(256*max(s.devicePixelRatio() for s in QApplication.screens()))))
-        size_mib=self.capacity.value()*size*size*4/1024**2
-        self.estimate.setText(f'预加载像素约 {size_mib:.1f} MiB。\n运行内存 (RAM) 还包含显示画面、Qt 和 FFmpeg 等开销。')
-        self.apply_button.setEnabled((self.quality.currentData(),self.capacity.value())!=
-                                     (self.pet.resolution,self.pet.buffer_capacity))
+        self.buffer_controls.setEnabled(not self.preload.isChecked())
+        selected = (self.quality.currentData(), self.capacity_value(), self.fps.currentData(), self.preload.isChecked())
+        saved = (self.pet.resolution, self.pet.buffer_capacity, self.pet.fps_limit, self.pet.preload_whole)
+        self.apply_button.setEnabled(selected != saved)
 
     def apply(self):
-        self.capacity.interpretText()
-        self.pet.apply_performance(self.quality.currentData(),self.capacity.value())
+        self.commit_capacity()
+        self.pet.apply_performance(self.quality.currentData(), self.capacity_value(),
+                                   self.fps.currentData(), self.preload.isChecked())
         self.refresh()
+
+    def reset_defaults(self):
+        self.quality.setCurrentIndex(self.quality.findData(DEFAULT_RESOLUTION))
+        self.capacity.setText(str(DEFAULT_BUFFER_FRAMES))
+        self.buffer_slider.setValue(DEFAULT_BUFFER_FRAMES)
+        self.fps.setCurrentIndex(self.fps.findData(DEFAULT_FPS_LIMIT))
+        self.preload.setChecked(False)

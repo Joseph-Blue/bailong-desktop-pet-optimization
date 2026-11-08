@@ -12,8 +12,10 @@ def ffmpeg_path():
     if found:return found
     raise RuntimeError('缺少透明动画播放器，请重新完整解压桌宠安装包。')
 
-def rgba_frames(path,size,process_changed=None,rate_changed=None):
-    args=[ffmpeg_path(),'-hide_banner','-nostdin','-nostats','-loglevel','info' if rate_changed else 'error','-threads','2','-c:v','libvpx-vp9','-i',str(path),'-an','-vf',f'scale={size}:{size}:flags=lanczos','-pix_fmt','rgba','-threads','2','-f','rawvideo','pipe:1']
+def rgba_frames(path,size,process_changed=None,rate_changed=None,fps=None):
+    filters=f'scale={size}:{size}:flags=lanczos'
+    if fps is not None:filters=f"fps='min(source_fps,{fps})',"+filters
+    args=[ffmpeg_path(),'-hide_banner','-nostdin','-nostats','-loglevel','info' if rate_changed else 'error','-threads','2','-c:v','libvpx-vp9','-i',str(path),'-an','-vf',filters,'-pix_fmt','rgba','-threads','2','-f','rawvideo','pipe:1']
     kwargs={'creationflags':subprocess.CREATE_NO_WINDOW} if sys.platform=='win32' else {}
     with subprocess.Popen(args,stdout=subprocess.PIPE,stderr=subprocess.PIPE,**kwargs) as proc:
         if process_changed:process_changed(proc)
@@ -24,7 +26,8 @@ def rgba_frames(path,size,process_changed=None,rate_changed=None):
                 if rate_changed and not rate_ready.is_set() and 'Video:' in line:
                     match=re.search(r'\b([0-9]+(?:\.[0-9]+)?) fps\b',line)
                     if match and float(match[1])>0:
-                        rate_changed(float(match[1]));rate_ready.set()
+                        native_rate=float(match[1])
+                        rate_changed(native_rate if fps is None else min(native_rate,fps));rate_ready.set()
         reader=threading.Thread(target=drain_errors,daemon=True);reader.start()
         try:
             stride=size*size*4

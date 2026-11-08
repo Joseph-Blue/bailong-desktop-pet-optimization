@@ -132,6 +132,7 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
                             'exec ./BailongPet "$@"\n', encoding='utf-8')
         launcher.chmod(0o755)
     print(f'本机构建完成：{output}\n实机验收按 BUILDING.md 记录；未上传或发布。', flush=True)
+    return output
 
 
 if __name__ == '__main__':
