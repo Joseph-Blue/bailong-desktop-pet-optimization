@@ -16,3 +16,17 @@ outputs/
 *.zip
 检查报告.json
 检查预览.png
+work/video-deps/
+
+# Local verification files added by this optimization branch
+/app/test_diagnostic_identity.py
+/app/test_frame_buffer.py
+/app/test_performance_defaults.py
+/app/test_performance_layout.py
+/app/test_performance_metrics.py
+/app/test_playback_rates.py
+/app/test_task_activity.py
+/work/test_build_dependencies.py
+/work/test_build_size.py
+/work/test_build_windows.py
+/work/test_build_windows_package.py

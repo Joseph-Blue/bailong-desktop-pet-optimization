@@ -126,7 +126,7 @@ try {
         Write-Host '依赖已满足，跳过安装。'
     }
     Write-Host '打包程序、素材和 FFmpeg...'
-    $BuildArgs = @('work/build_windows.py')
+    $BuildArgs = @('work/build_windows_optimized.py')
     if ($FFmpeg) { $BuildArgs += @('--ffmpeg', $FFmpeg) }
     if ($Zip) { $BuildArgs += '--zip' }
     Invoke-Checked $VenvPython $BuildArgs

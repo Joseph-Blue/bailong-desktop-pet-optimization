@@ -22,3 +22,5 @@
 
 - 同步更新版本和 CHANGELOG。仅按用户授权本地提交或推送。
 - 不提交素材、虚拟环境、构建产物、用户配置和账号数据。
+- 保留原作者基线自带的测试；本分支新增的验证脚本、截图和临时产物只在本地使用，不纳入 Git。未经用户明确要求，不新增需要提交的测试文件。
+- Windows 自动化入口与作者原脚本并存：`build-windows.ps1` 调用 `work/build_windows_optimized.py`；`work/build_windows.py` 保留作者原版，`work/build_release.py` 保留原发行流程并维护当前源码清单。
