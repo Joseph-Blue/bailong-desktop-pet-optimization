@@ -10,7 +10,7 @@
 
 opt.23 修复任务气泡空白、性能设置改为即时生效、关闭角色窗口系统阴影，并为构建接入素材自动下载；应用包尚未构建或发布。
 
-素材由 **jingh12312-rgb** 原作者提供。本仓库的[独立素材包](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.1)仅整理原始动画、清单及来源说明。有 GitHub 登录时自动使用该包；没有登录时自动提取作者公开 v0.5.1 完整包中的 `outputs`。详见 [素材来源](ASSETS.md)。
+素材由 **jingh12312-rgb** 原作者提供。本仓库的[独立素材包](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.1)仅整理原始动画、清单及来源说明。有 GitHub 登录时自动使用该包；没有登录时自动提取作者公开 v0.5.1 完整包中的 `outputs`。另外提供仅替换四段动画的[修复备选包](docs/修复素材备选包.md)。Windows EXE 与 macOS App 图标统一使用修复 idle 的第一帧。详见 [素材来源](ASSETS.md)。
 
 ## 实现变化
 

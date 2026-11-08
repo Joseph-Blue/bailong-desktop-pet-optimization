@@ -132,6 +132,8 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
                     '--exclude-module', 'PySide6.QtMultimedia']
     if target != 'linux':
         options.append('--windowed')
+        from build_icons import build_icon
+        options += ['--icon', str(build_icon(target))]
     if target == 'macos':
         options += ['--osx-bundle-identifier', 'com.bailongpet.desktop',
                     '--hidden-import', 'mac_autostart', '--hidden-import', 'AppKit',

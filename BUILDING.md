@@ -56,6 +56,14 @@ Windows PowerShell、macOS Bash、三类 Linux Bash 入口及对应 Python 构�
 
 单独准备素材：`python work/fetch_release_assets.py`。重新制作独立素材 ZIP：`python work/package_assets.py`，输出 `.build/assets/bailong-original-v0.5.1-assets.zip`；只包含清单引用的原始动画、素材清单和作者来源说明，不包含程序或运行库。来源与原作者说明见 [ASSETS.md](ASSETS.md)。
 
+## 修复备选素材与应用图标
+
+默认自动下载仍使用原始包。需要替换四段修复动画时，按 [修复素材备选包说明](docs/修复素材备选包.md) 放入完整备选目录和清单；已有引用文件齐全时不会重新下载。备选包包含 31 段原始 WebM 与 4 段无损 APNG，播放走现有 FFmpeg／Pillow 路径。
+
+重新封装备选包：`python work/package_assets.py --repaired-animations /path/to/animations`，该目录应包含 `idle.png`、`idle2.png`、`drag.png`、`landing.png` 四个 APNG。输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；原始包不会覆盖。
+
+Windows 优化入口、作者 Windows 原入口与 macOS 入口构建时均使用修复 idle 第一帧作为应用图标。源图为 `app/icons/repaired-idle.png`，`work/build_icons.py` 生成 `.build/icons/BailongPet.ico`／`BailongPet.icns` 并通过 PyInstaller `--icon` 接入。不要求用户安装图标工具，也不更换动画素材。单独生成图标：`python work/build_icons.py`。
+
 ## Windows：PowerShell 5.1／7+
 
 未安装合适版本时，手动执行：

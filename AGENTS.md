@@ -17,6 +17,6 @@
 ## 交付
 
 - 同步更新版本和 CHANGELOG。仅按用户授权本地提交或推送。
-- 不提交素材、虚拟环境、应用包、用户配置和账号数据。用户指定的精简 Windows x86_64 FFmpeg、版本记录与许可文件在 `tools/` 追踪，供克隆后直接构建。
+- 不提交整段动画素材、虚拟环境、应用包、用户配置和账号数据。用户指定的应用图标首帧 `app/icons/repaired-idle.png` 作为构建资源追踪；动画备选包只发布为 Release 附件。用户指定的精简 Windows x86_64 FFmpeg、版本记录与许可文件在 `tools/` 追踪，供克隆后直接构建。
 - 保留原作者基线自带的测试；本分支新增的验证脚本、截图和临时产物只在本地使用，不纳入 Git。未经用户明确要求，不新增需要提交的测试文件。
 - Windows 自动化入口与作者原脚本并存：`build-windows.ps1` 调用 `work/build_windows_optimized.py`；`work/build_windows.py` 保留作者原版，`work/build_release.py` 保留原发行流程并维护当前源码清单。
