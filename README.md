@@ -4,7 +4,7 @@
 
 当前版本 **0.5.1-opt.23**，分支 `joseph/optimization`。`opt.N` 表示本分支的迭代号，界面版本同时显示平台和架构。
 
-[构建说明](BUILDING.md) · [更新记录](CHANGELOG.md) · [开发约定](DEVELOPMENT.md) · [给原作者的优化说明](优化说明.md)
+[与原作者版本的改动对照](docs/原作者版本改动对照.md) · [构建说明](BUILDING.md) · [更新记录](CHANGELOG.md) · [开发约定](DEVELOPMENT.md) · [给原作者的优化说明](优化说明.md)
 
 私有仓库 [Release](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases) 提供 Windows x86_64、macOS arm64 和 Debian / Arch / Fedora x86_64 五种完整运行包；也可按构建说明在目标系统本地构建。
 
