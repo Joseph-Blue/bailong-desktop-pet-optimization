@@ -74,6 +74,22 @@ def copy_resources(destination, inputs):
     (destination / 'VERSION.txt').write_text(VERSION + '\n', encoding='utf-8')
 
 
+def place_ffmpeg(output, target, source):
+    """Expose the decoder at its runtime path without duplicating its bytes."""
+    resources = output / 'Contents/Resources' if target == 'macos' else output
+    collected = (resources if target == 'macos' else output / '_internal') / 'tools' / source.name
+    bundled = resources / 'tools' / ('ffmpeg.exe' if target == 'windows' else 'ffmpeg')
+    bundled.parent.mkdir(exist_ok=True)
+    if collected.resolve() == bundled.resolve():
+        return
+    if target == 'windows':
+        # The existing Windows runtime already launches tools/ffmpeg.exe.
+        collected.replace(bundled)
+    else:
+        # Keep PyInstaller's library-relative paths and macOS bundle layout intact.
+        bundled.symlink_to(os.path.relpath(collected, bundled.parent))
+
+
 def build_desktop(target, family=None, ffmpeg_arg=None):
     expected = {'windows': 'win32', 'linux': 'linux', 'macos': 'darwin'}[target]
     if sys.platform != expected:
@@ -91,6 +107,9 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
                '--distpath', str(dist), '--workpath', str(work), '--specpath', str(work),
                '--hidden-import', 'autostart', '--hidden-import', 'selftest',
                '--hidden-import', 'version', '--hidden-import', 'PySide6.QtMultimedia']
+    if target == 'windows':
+        options += ['--additional-hooks-dir', str(ROOT / 'work/hooks/windows'),
+                    '--exclude-module', 'PIL.AvifImagePlugin', '--exclude-module', 'PIL._avif']
     if target != 'linux':
         options.append('--windowed')
     if target == 'macos':
@@ -105,13 +124,7 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
     resources = output / 'Contents/Resources' if target == 'macos' else output
     copy_resources(resources, inputs)
     if inputs[3]:
-        # Non-macOS runtime resources live beside the executable, not _internal.
-        bundled = resources / 'tools' / ('ffmpeg.exe' if target == 'windows' else 'ffmpeg')
-        bundled.parent.mkdir(exist_ok=True)
-        # PyInstaller can retain a versioned imageio executable name; normalize it.
-        collected = (resources if target == 'macos' else output / '_internal') / 'tools' / inputs[3].name
-        if collected.resolve() != bundled.resolve():
-            shutil.copy2(collected, bundled)
+        place_ffmpeg(output, target, inputs[3])
     info = {'version': VERSION, 'branch': BRANCH, 'platform': target, 'architecture': arch,
             'python': platform.python_version(), 'linuxFamily': family,
             'animationFiles': len(inputs[2]), 'validation': 'built; runtime acceptance pending'}
@@ -131,7 +144,9 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
                             'export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"\n'
                             'exec ./BailongPet "$@"\n', encoding='utf-8')
         launcher.chmod(0o755)
-    print(f'构建完成：{output}', flush=True)
+    size = sum(path.stat().st_size for path in output.rglob('*')
+               if not path.is_symlink() and path.is_file())
+    print(f'构建完成：{output}\n目录体积：{size / 2**20:.2f} MiB', flush=True)
     return output
 
 

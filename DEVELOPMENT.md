@@ -28,3 +28,5 @@ Windows 构建流程离线回归：`python -m unittest discover -s work -p "test
 2026-11-08：opt.9 的性能默认值、设置持久化、帧率降采样、VP9 透明度、整段预加载与取消切换测试通过；Windows 已读取真实系统已提交内存计数。两个窗口以离屏渲染检查浅色／深色、150% 缩放、16 pt 大字体、窄窗口分栏切换及仅关闭按钮标志。Windows 原生标题栏外观、macOS／Linux 桌面窗口行为仍需实机验收。
 
 opt.9 布局修正：使用长 CPU／GPU 名称和 13 个桌面进程验证等宽双栏、窄窗口排列与复制全文；路径链接指向所在目录。Windows PowerShell 5.1／7 的解释器失败路径显示 winget 手动安装命令，测试不执行安装。
+
+opt.10：构建瘦身规则见 `work/hooks/windows/` 和 `work/build_common.py`。增加界面或素材格式时复核插件排除清单。保留 PyInstaller 上游 Qt 依赖收集逻辑，不在打包后按 DLL 名称批量删除运行库。

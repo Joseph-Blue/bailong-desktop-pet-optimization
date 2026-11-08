@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.9`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.10`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
 
 ## 所有平台先准备
 
@@ -74,9 +74,9 @@ winget install --id Python.Python.3.13 --exact
 
 维护此脚本时保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 可能将无 BOM 的 UTF-8 脚本按系统代码页解读，导致中文错误或解析失败。脚本兼容两种 PowerShell 不代表支持旧版 Windows；Python、Qt 与 FFmpeg 的系统及架构要求仍需满足。
 
-虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.9/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.10/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.9-windows-x64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。ZIP 是本地测试包，不自动上传或创建 Release，也不调用旧脚本生成历史发行文案及许可证汇总。
+在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.10-windows-x64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。ZIP 是本地测试包，不自动上传或创建 Release，也不调用旧脚本生成历史发行文案及许可证汇总。
 
 `work/build_windows.py` 现在直接整理完整测试目录。原作者的 `work/build_release.py` 保留作历史发行包整理参考，以上入口不调用它，也不生成 GitHub Release。
 
@@ -177,6 +177,16 @@ Linux 的全屏自动检测及跟随 Codex 启动未接入；不要把 Windows�
 已安装依赖的虚拟环境也可以直接运行对应的 `work/build_windows.py`、`work/build_macos.py` 或 `work/build_linux.py --family debian`，均支持 `--ffmpeg`，并拒绝在错误的操作系统构建。Windows 入口额外支持 `--zip`。程序入口不变，仍是 `app/pet.py`。
 
 打包资源内的 `BUILD_INFO.json` 记录分支版本、Python、平台、架构和素材文件数量，不包含本机用户名或绝对路径。仓库根目录旧 `BUILD_INFO.json` 与 `RELEASE_NOTES.md` 是作者 v0.5.1 的历史记录，不代表这次构建。
+
+## 包体积
+
+opt.10 的 FFmpeg 在产物中只保留一份：Windows 使用 `tools/ffmpeg.exe`，macOS／Linux 通过相对符号链接复用 PyInstaller 收集的文件。移动 Linux 目录包时保留符号链接。
+
+Windows 使用 `work/hooks/windows/hook-PySide6.QtGui.py`，在依赖分析前排除 PDF 图片和 Qt 虚拟键盘插件，避免为它们收集 Qt PDF、QML／Quick 库；另排除 Pillow AVIF 解码器。本应用使用 Widgets、系统输入法、WebM／WebP 动画和 WAV 音效。软件 OpenGL、Qt 多媒体后端及原始素材继续保留。
+
+本机 opt.9 目录为 460.14 MiB，其中重复 FFmpeg 83.58 MiB，上述 Qt 插件依赖链 19.79 MiB，Pillow AVIF 扩展 7.47 MiB。按这些文件计算，opt.10 预计约 349.30 MiB；这是文件清单估算，实际值以新构建末尾输出为准。
+
+离线检查：`python -m unittest discover -s work -p "test_build_size.py" -v`。验证解码器仅一份、相对链接目标、插件过滤以及构建入口接线；不执行应用打包。新包运行验收包括动画透明边缘、WebP 后备路径、中文输入、点击音效和系统主题。
 
 ## 性能设置
 
