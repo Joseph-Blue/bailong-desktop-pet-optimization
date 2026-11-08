@@ -9,7 +9,9 @@ class PlatformTests(unittest.TestCase):
         import objc
         from AppKit import (NSWindowCollectionBehaviorCanJoinAllSpaces,
                             NSWindowCollectionBehaviorMoveToActiveSpace,
+                            NSWindowCollectionBehaviorFullScreenPrimary,
                             NSWindowCollectionBehaviorFullScreenAuxiliary,
+                            NSWindowCollectionBehaviorFullScreenNone,
                             NSFloatingWindowLevel)
         from PySide6.QtCore import Qt
         from PySide6.QtWidgets import QApplication,QWidget
@@ -30,8 +32,11 @@ class PlatformTests(unittest.TestCase):
             behavior=window.collectionBehavior()
             self.assertFalse(behavior & NSWindowCollectionBehaviorMoveToActiveSpace)
             self.assertTrue(behavior & NSWindowCollectionBehaviorCanJoinAllSpaces)
-            self.assertTrue(behavior & NSWindowCollectionBehaviorFullScreenAuxiliary)
-            self.assertEqual(behavior & original,original & ~NSWindowCollectionBehaviorMoveToActiveSpace)
+            self.assertFalse(behavior & NSWindowCollectionBehaviorFullScreenAuxiliary)
+            self.assertFalse(behavior & NSWindowCollectionBehaviorFullScreenPrimary)
+            self.assertTrue(behavior & NSWindowCollectionBehaviorFullScreenNone)
+            excluded=(NSWindowCollectionBehaviorMoveToActiveSpace|NSWindowCollectionBehaviorFullScreenPrimary|NSWindowCollectionBehaviorFullScreenAuxiliary)
+            self.assertEqual(behavior & original,original & ~excluded)
             p.configure_mac_window(widget)
             self.assertEqual(window.collectionBehavior(),behavior)
         finally:

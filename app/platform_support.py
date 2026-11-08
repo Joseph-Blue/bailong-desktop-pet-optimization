@@ -29,7 +29,9 @@ def configure_mac_window(widget):
     import objc
     from AppKit import (NSWindowCollectionBehaviorCanJoinAllSpaces,
                         NSWindowCollectionBehaviorMoveToActiveSpace,
+                        NSWindowCollectionBehaviorFullScreenPrimary,
                         NSWindowCollectionBehaviorFullScreenAuxiliary,
+                        NSWindowCollectionBehaviorFullScreenNone,
                         NSFloatingWindowLevel)
     view=objc.objc_object(c_void_p=int(widget.winId()))
     window=view.window()
@@ -37,16 +39,33 @@ def configure_mac_window(widget):
     # after winId()/show() does not update hidesOnDeactivate in Qt 6.9.2.
     window.setHidesOnDeactivate_(False)
     window.setLevel_(max(window.level(),NSFloatingWindowLevel))
-    # Qt tool windows can start with MoveToActiveSpace. AppKit rejects
-    # combining it with CanJoinAllSpaces; retain unrelated Qt flags.
-    behavior=window.collectionBehavior() & ~NSWindowCollectionBehaviorMoveToActiveSpace
-    window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
+    # 参照原生工程 Pet.swift / Bubble.swift / ChatComposer.swift：普通桌面共享，
+    # 但不作为辅助窗口跟入全屏空间。清除 Qt 原有的冲突标志，保留其他行为。
+    excluded=(NSWindowCollectionBehaviorMoveToActiveSpace|
+              NSWindowCollectionBehaviorFullScreenPrimary|NSWindowCollectionBehaviorFullScreenAuxiliary)
+    behavior=window.collectionBehavior() & ~excluded
+    window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenNone)
 
 def mac_fullscreen():
-    from AppKit import NSApplication, NSApplicationPresentationFullScreen, NSWorkspace
+    import Quartz as q
+    from AppKit import NSScreen, NSWorkspace
+    from desktop_visibility import covers_monitor
     front=NSWorkspace.sharedWorkspace().frontmostApplication()
     if front is None or front.processIdentifier()==os.getpid():return False
-    # 读取前台应用当前生效的系统全屏标志。填充窗口、自动隐藏 Dock／菜单栏
-    # 都不等于全屏，不能再用窗口尺寸或屏幕安全区域推断。
-    options=NSApplication.sharedApplication().currentSystemPresentationOptions()
-    return bool(options & NSApplicationPresentationFullScreen)
+    screens=NSScreen.screens()
+    if not screens:return False
+    # 与原生工程 PetController.checkDesktop 一致：AppKit 屏幕坐标转换到
+    # Quartz 坐标，使用完整 frame，不扣刘海安全区，也不使用填充对应的 visibleFrame。
+    top=screens[0].frame().origin.y+screens[0].frame().size.height
+    monitors=[]
+    for screen in screens:
+        frame=screen.frame()
+        x,y,width,height=frame.origin.x,frame.origin.y,frame.size.width,frame.size.height
+        monitors.append((x,top-y-height,x+width,top-y))
+    windows=q.CGWindowListCopyWindowInfo(q.kCGWindowListOptionOnScreenOnly|q.kCGWindowListExcludeDesktopElements,q.kCGNullWindowID) or []
+    for window in windows:
+        if window.get(q.kCGWindowOwnerPID)!=front.processIdentifier() or window.get(q.kCGWindowLayer)!=0:continue
+        bounds=window[q.kCGWindowBounds]
+        rect=(bounds['X'],bounds['Y'],bounds['X']+bounds['Width'],bounds['Y']+bounds['Height'])
+        if any(covers_monitor(rect,monitor) for monitor in monitors):return True
+    return False
