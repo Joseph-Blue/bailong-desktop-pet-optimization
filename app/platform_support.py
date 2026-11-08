@@ -43,23 +43,10 @@ def configure_mac_window(widget):
     window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
 
 def mac_fullscreen():
-    import Quartz as q
-    from AppKit import NSScreen, NSWorkspace
-    from desktop_visibility import covers_monitor
+    from AppKit import NSApplication, NSApplicationPresentationFullScreen, NSWorkspace
     front=NSWorkspace.sharedWorkspace().frontmostApplication()
     if front is None or front.processIdentifier()==os.getpid():return False
-    pid=front.processIdentifier()
-    monitors=[]
-    for screen in NSScreen.screens():
-        r=q.CGDisplayBounds(screen.deviceDescription()['NSScreenNumber'])
-        insets=screen.safeAreaInsets()
-        # 刘海屏的系统全屏窗口位于安全区域内；Quartz 坐标的 Y 轴向下。
-        # 不用 visibleFrame，避免把普通保留菜单栏和 Dock 的最大化窗口当成全屏。
-        monitors.append((r.origin.x+insets.left,r.origin.y+insets.top,
-                         r.origin.x+r.size.width-insets.right,r.origin.y+r.size.height-insets.bottom))
-    for w in q.CGWindowListCopyWindowInfo(q.kCGWindowListOptionOnScreenOnly|q.kCGWindowListExcludeDesktopElements,q.kCGNullWindowID) or []:
-        if w.get(q.kCGWindowOwnerPID)!=pid or w.get(q.kCGWindowLayer)!=0:continue
-        b=w[q.kCGWindowBounds];r=(b['X'],b['Y'],b['X']+b['Width'],b['Y']+b['Height'])
-        # 同一应用的工具栏、浮层可排在全屏主窗口前，必须继续检查后续窗口。
-        if any(covers_monitor(r,m) for m in monitors):return True
-    return False
+    # 读取前台应用当前生效的系统全屏标志。填充窗口、自动隐藏 Dock／菜单栏
+    # 都不等于全屏，不能再用窗口尺寸或屏幕安全区域推断。
+    options=NSApplication.sharedApplication().currentSystemPresentationOptions()
+    return bool(options & NSApplicationPresentationFullScreen)
