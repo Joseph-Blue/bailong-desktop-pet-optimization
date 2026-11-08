@@ -14,11 +14,12 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushB
 
 from chat_backend import HistoryStore, CodexSession, TaskCancelled
 from platform_support import configure_mac_window
+from performance_ui import readable_font
 
 FLAGS = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool
 # Qt's portable Ctrl modifier maps to Command on macOS; only its label differs.
 SEND_HINT = ('Command' if sys.platform=='darwin' else 'Ctrl')+'+Enter 发送'
-STYLE = '''QWidget {font-family:"Microsoft YaHei","Segoe UI";font-size:12px;color:#38294d;background:#fcfaff;}
+STYLE = '''QWidget {color:#38294d;background:#fcfaff;}
 QPushButton {background:#eee6f7;border:1px solid #d6c5e7;border-radius:8px;padding:6px 10px;}
 QPushButton:hover {background:#e3d3f1;} QPushButton:disabled {color:#92869d;}
 QPlainTextEdit,QTextBrowser,QListWidget {background:white;border:1px solid #d9cbe5;border-radius:8px;padding:6px;}
@@ -35,16 +36,17 @@ class Composer(QWidget):
 
     def __init__(self):
         super().__init__(None, FLAGS)
+        self.setFont(readable_font())
         self.setWindowTitle('白龙娘 · 对话模式')
-        self.setStyleSheet(STYLE)
-        self.setFixedSize(280, 152)
-        self.setStyleSheet(STYLE+'QPushButton {padding:4px 5px;font-size:11px;} QComboBox {padding:2px;font-size:11px;}')
+        self.setMinimumSize(self.fontMetrics().horizontalAdvance('汉')*22, self.fontMetrics().lineSpacing()*12)
+        self.resize(self.minimumSize())
+        self.setStyleSheet(STYLE+'QPushButton {padding:4px 5px;} QComboBox {padding:2px;}')
         layout = QVBoxLayout(self)
         layout.setContentsMargins(7, 5, 7, 6)
         layout.setSpacing(3)
         head = QHBoxLayout()
         self.status = QLabel('主人，今天想让我帮什么忙呀？')
-        self.status.setWordWrap(True);self.status.setMaximumHeight(30)
+        self.status.setWordWrap(True);self.status.setMaximumHeight(self.fontMetrics().lineSpacing()*2)
         head.addWidget(self.status, 1)
         close = QPushButton('×'); close.setFixedWidth(22); close.clicked.connect(self.close)
         head.addWidget(close); layout.addLayout(head)
@@ -90,6 +92,7 @@ class ChatWindow(QWidget):
 
     def __init__(self):
         super().__init__(None, Qt.WindowType.Window)
+        self.setFont(readable_font())
         self.setWindowTitle('GPT白龙娘动态桌宠 · 历史对话')
         self.resize(940, 680)
         self.setMinimumSize(580, 440)
@@ -99,6 +102,7 @@ class ChatWindow(QWidget):
         new = QPushButton('新对话'); new.clicked.connect(self.new_chat)
         self.folder_button = QPushButton('选择任务文件夹'); self.folder_button.clicked.connect(self.folder)
         self.status = QLabel('主人的叮嘱，我都记在这台电脑里啦')
+        self.status.setWordWrap(True)
         toolbar.addWidget(new);toolbar.addWidget(self.folder_button);toolbar.addWidget(self.status, 1)
         self.codex_button = QPushButton('转到 Codex');self.codex_button.hide()
         toolbar.addWidget(self.codex_button)

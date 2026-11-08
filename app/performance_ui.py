@@ -1,16 +1,24 @@
 """Shared native window and layout rules for performance panels."""
+import sys
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
-from PySide6.QtWidgets import QBoxLayout, QWidget, QSizePolicy
+from PySide6.QtWidgets import QApplication, QBoxLayout, QWidget, QSizePolicy
+
+
+def readable_font(scale=1.0):
+    """Use point sizes so Qt handles monitor DPI; keep small bubbles readable."""
+    font = QFont(QApplication.font())
+    if sys.platform == 'win32':
+        font.setFamilies(list(dict.fromkeys(font.families() + ['Microsoft YaHei UI', 'Microsoft YaHei'])))
+    font.setPointSizeF(max(12.0, font.pointSizeF()) * max(1.0, scale))
+    return font
 
 
 def configure_window(window):
     window.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.CustomizeWindowHint |
                           Qt.WindowType.WindowTitleHint | Qt.WindowType.WindowSystemMenuHint |
                           Qt.WindowType.WindowCloseButtonHint)
-    font = QFont(window.font())
-    font.setPointSizeF(max(12, font.pointSizeF()))
-    window.setFont(font)
+    window.setFont(readable_font())
     QShortcut(QKeySequence(Qt.Key.Key_Escape), window, activated=window.close)
 
 

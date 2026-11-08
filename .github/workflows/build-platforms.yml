@@ -1,0 +1,119 @@
+name: Build macOS and Linux packages
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release containing the Windows x86_64 package and original assets
+        required: true
+        default: v0.5.1-opt.13
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: arm64
+      - name: Prepare assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: python work/fetch_release_assets.py
+      - name: Build decoder and application
+        run: |
+          test "$(uname -m)" = arm64
+          brew list pkgconf >/dev/null 2>&1 || brew install pkgconf
+          python -m pip install -r requirements-build.txt -r requirements-macos.txt
+          python work/build_minimal_ffmpeg.py
+          python work/build_macos.py --ffmpeg .build-ffmpeg/darwin-arm64/bin/ffmpeg
+          python work/archive_platform.py --platform macos --directory dist-macos/BailongPet.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: .build-release/artifacts/*
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - family: debian
+            image: python:3.13-slim-bookworm
+            python: python3
+          - family: fedora
+            image: rockylinux:9
+            python: python3.11
+          - family: arch
+            image: archlinux:base
+            python: .build-python/bin/python3.13
+    container: ${{ matrix.image }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build tools and desktop libraries
+        env:
+          FAMILY: ${{ matrix.family }}
+        run: |
+          case "$FAMILY" in
+            debian)
+              apt-get update
+              apt-get install -y git build-essential binutils pkg-config nasm perl unzip libgl1 libegl1 libfontconfig1 libdbus-1-3 libx11-xcb1 libxrender1 libxext6 libsm6 libice6 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 libxcb-xkb1 libxcb-randr0 libxcb-shape0 libxcb-xfixes0 libxkbcommon-x11-0 fonts-noto-cjk
+              ;;
+            fedora)
+              dnf install -y dnf-plugins-core
+              dnf config-manager --set-enabled crb
+              dnf install -y epel-release
+              dnf install -y git python3.11 python3.11-pip python3.11-devel gcc gcc-c++ make binutils pkgconf-pkg-config nasm perl unzip tar xz libglvnd-glx libglvnd-egl fontconfig dbus-libs libX11-xcb libXrender libXext libSM libICE libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 google-noto-sans-cjk-fonts
+              ;;
+            arch)
+              pacman -Syu --noconfirm git uv base-devel binutils pkgconf nasm perl unzip libglvnd fontconfig dbus libx11 libxrender libxext libsm libice libxcb xcb-util-cursor xcb-util-wm xcb-util-image xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11 noto-fonts-cjk
+              ;;
+          esac
+      - uses: actions/checkout@v4
+      - name: Select Python 3.13 on Arch
+        if: matrix.family == 'arch'
+        run: |
+          uv python install 3.13
+          uv venv --python 3.13 --seed .build-python
+      - name: Prepare assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          PYTHON: ${{ matrix.python }}
+        run: '"$PYTHON" work/fetch_release_assets.py'
+      - name: Build decoder and application
+        env:
+          PYTHON: ${{ matrix.python }}
+          FAMILY: ${{ matrix.family }}
+        run: |
+          "$PYTHON" -m venv .venv-build-ci
+          .venv-build-ci/bin/python -m pip install -r requirements-build.txt
+          .venv-build-ci/bin/python work/build_minimal_ffmpeg.py
+          .venv-build-ci/bin/python work/build_linux.py --family "$FAMILY" --ffmpeg .build-ffmpeg/linux-x86_64/bin/ffmpeg
+          .venv-build-ci/bin/python work/archive_platform.py --platform linux --family "$FAMILY" --directory "dist-linux/$FAMILY-x86_64/BailongPet"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.family }}-x86_64
+          path: .build-release/artifacts/*
+  publish:
+    needs: [macos, linux]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Attach packages to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$RELEASE_TAG" packages/*

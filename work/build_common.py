@@ -6,6 +6,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from importlib import metadata
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'app'))
@@ -69,9 +70,25 @@ def copy_resources(destination, inputs):
         shutil.copy2(assets / relative, output)
     (target / '素材清单.json').write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
     shutil.copytree(ROOT / 'app/sounds', destination / 'app/sounds', dirs_exist_ok=True)
-    for name in ('CHANGELOG.md', 'ASSETS.md', 'BUILDING.md'):
+    for name in ('README.md', 'CHANGELOG.md', 'ASSETS.md', 'BUILDING.md', '优化说明.md'):
         shutil.copy2(ROOT / name, destination / name)
     (destination / 'VERSION.txt').write_text(VERSION + '\n', encoding='utf-8')
+    licenses = destination / 'licenses'
+    licenses.mkdir(exist_ok=True)
+    python_license = Path(sys.base_prefix) / 'LICENSE.txt'
+    if python_license.is_file():
+        shutil.copy2(python_license, licenses / 'Python.txt')
+    for name in ('PySide6', 'PySide6_Essentials', 'PySide6_Addons', 'shiboken6',
+                 'Pillow', 'psutil', 'PyInstaller'):
+        package = metadata.distribution(name)
+        for relative in package.files or []:
+            if 'license' in str(relative).lower() or 'copying' in str(relative).lower():
+                source = package.locate_file(relative)
+                if source.is_file():
+                    target = licenses / name / Path(relative)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, target)
+    shutil.copy2(ROOT / 'app/sounds/Kenney-License.txt', licenses / 'Kenney-License.txt')
 
 
 def place_ffmpeg(output, target, source):
@@ -97,6 +114,7 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
     check_python()
     inputs = build_inputs(ffmpeg_arg)
     arch = platform.machine().lower()
+    arch = {'amd64': 'x86_64', 'x64': 'x86_64', 'aarch64': 'arm64'}.get(arch, arch)
     if target == 'windows':
         dist = ROOT / '发布包' / f'build-v{VERSION}'
         work = ROOT / '.build' / f'work-v{VERSION}'
@@ -125,6 +143,16 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
     copy_resources(resources, inputs)
     if inputs[3]:
         place_ffmpeg(output, target, inputs[3])
+        decoder_dir = inputs[3].parent
+        metadata = decoder_dir / 'ffmpeg-build.json'
+        if metadata.is_file():
+            import hashlib
+            details = json.loads(metadata.read_text(encoding='utf-8'))
+            digest = hashlib.sha256(inputs[3].read_bytes()).hexdigest()
+            if details.get('binarySha256') == digest:
+                shutil.copy2(metadata, resources / 'tools/ffmpeg-build.json')
+                shutil.copytree(decoder_dir / 'ffmpeg-licenses', resources / 'tools/ffmpeg-licenses',
+                                dirs_exist_ok=True)
     info = {'version': VERSION, 'branch': BRANCH, 'platform': target, 'architecture': arch,
             'python': platform.python_version(), 'linuxFamily': family,
             'animationFiles': len(inputs[2]), 'validation': 'built; runtime acceptance pending'}

@@ -6,10 +6,11 @@ from PySide6.QtGui import QImage, QPixmap, QPainter, QRegion, QCursor, QIcon, QT
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QProgressBar, QMenu, QMessageBox, QPushButton, QSystemTrayIcon, QTextBrowser, QSlider, QDialog, QCheckBox
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from quota import read_quota, quota_windows
-from version import VERSION, BASE_VERSION, BRANCH
+from version import VERSION, BASE_VERSION, BRANCH, platform_version
 from movement import plan_movement, movement_fraction
 from frame_buffer import FrameBuffer
 from performance_preferences import read_performance_preferences, decode_size, fps_cap
+from performance_ui import readable_font
 
 from platform_support import resource_root,state_root,configure_mac_window
 ROOT=resource_root()
@@ -37,15 +38,16 @@ class Bubble(QWidget):
     dismiss_requested=Signal()
     def __init__(self):
         super().__init__(None, FLAGS)
+        self.setFont(readable_font())
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.scale_percent=100;self.base_width=256;self.is_task_bubble=False;self.is_size_preview=False
         self.layout=QVBoxLayout(self); self.layout.setContentsMargins(13,10,13,10);self.layout.setSpacing(5)
         self.setFixedWidth(256)
-        self.setStyleSheet('QLabel {color:#332644;font-size:12px;font-family:"Microsoft YaHei","Segoe UI";} QProgressBar {background:#eee8f5;border:1px solid #c8b5dc;border-radius:7px;height:14px;} QProgressBar::chunk {background:#a47bc9;border-radius:6px;}')
+        self.setStyleSheet('QLabel {color:#332644;} QProgressBar {background:#eee8f5;border:1px solid #c8b5dc;border-radius:7px;height:14px;} QProgressBar::chunk {background:#a47bc9;border-radius:6px;}')
         self.close_button=QPushButton('×',self);self.close_button.setFixedSize(24,24)
         self.close_button.setToolTip('关闭气泡')
-        self.close_button.setStyleSheet('QPushButton {color:#776783;background:transparent;border:0;border-radius:10px;font-size:19px;} QPushButton:hover {background:#eee5f7;color:#503768;}')
+        self.close_button.setStyleSheet('QPushButton {color:#776783;background:transparent;border:0;border-radius:10px;} QPushButton:hover {background:#eee5f7;color:#503768;}')
         self.close_button.clicked.connect(self.hide)
         self.close_button.clicked.connect(lambda:self.dismiss_requested.emit())
     def resizeEvent(self,event):
@@ -54,19 +56,26 @@ class Bubble(QWidget):
             self.close_button.move(self.width()-self.close_button.width()-5,5);self.close_button.raise_()
     def set_scale_percent(self,value):
         self.scale_percent=max(50,min(150,int(value)));s=self.scale_percent/100
+        self.setFont(readable_font(s))
+        for widget in self.findChildren(QWidget):
+            widget.setFont(self.font())
         self.setFixedWidth(round(self.base_width*s))
         self.layout.setContentsMargins(round(13*s),round(10*s),round(13*s),round(10*s));self.layout.setSpacing(max(2,round(5*s)))
-        self.setStyleSheet(f'QLabel {{color:#332644;font-size:{round(12*s)}px;font-family:"Microsoft YaHei","Segoe UI";}} QPushButton {{font-size:{round(12*s)}px;}} QProgressBar {{background:#eee8f5;border:1px solid #c8b5dc;border-radius:5px;height:{round(14*s)}px;}} QProgressBar::chunk {{background:#a47bc9;border-radius:5px;}}')
+        self.setStyleSheet(f'QLabel {{color:#332644;}} QProgressBar {{background:#eee8f5;border:1px solid #c8b5dc;border-radius:5px;height:{round(14*s)}px;}} QProgressBar::chunk {{background:#a47bc9;border-radius:5px;}}')
         for view in self.findChildren(QTextBrowser):
+            view.document().setDefaultFont(self.font())
             view.setFixedHeight(round((view.property('baseHeight') or 76)*s))
-            view.setStyleSheet(f'QTextBrowser {{color:#332644;background:transparent;border:0;font-size:{round(12*s)}px;font-family:"Microsoft YaHei","Segoe UI";}}')
-        self.close_button.setFixedSize(max(16,round(24*s)),max(16,round(24*s)))
+            view.setStyleSheet('QTextBrowser {color:#332644;background:transparent;border:0;}')
+        close_font=readable_font(s);close_font.setPointSizeF(close_font.pointSizeF()*1.333)
+        self.close_button.setFont(close_font)
+        close_size=max(round(24*s),self.close_button.fontMetrics().horizontalAdvance('×')+6)
+        self.close_button.setFixedSize(close_size,close_size)
         if self.layout.count() and isinstance(self.layout.itemAt(0).widget(),QLabel):
             self.layout.itemAt(0).widget().setContentsMargins(0,0,self.close_button.width()+4,0)
         for button in self.findChildren(QPushButton):
             if button is not self.close_button:
                 button.setStyleSheet(f'color:#60358c;background:#eee5f7;border:0;border-radius:7px;padding:{max(3,round(7*s))}px;')
-        self.close_button.setStyleSheet(f'QPushButton {{color:#776783;background:transparent;border:0;border-radius:8px;font-size:{max(12,round(19*s))}px;}} QPushButton:hover {{background:#eee5f7;color:#503768;}}')
+        self.close_button.setStyleSheet('QPushButton {color:#776783;background:transparent;border:0;border-radius:8px;} QPushButton:hover {background:#eee5f7;color:#503768;}')
         self.adjustSize();self.close_button.move(self.width()-self.close_button.width()-5,5);self.close_button.raise_()
     def paintEvent(self,event):
         painter=QPainter(self);painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -95,7 +104,7 @@ class Bubble(QWidget):
         self.clear();self.label(title)
         self.result_title=self.layout.itemAt(0).widget()
         result=QTextBrowser();result.setPlainText(text);result.setOpenLinks(False)
-        result.setStyleSheet('QTextBrowser {color:#332644;background:transparent;border:0;font-size:12px;font-family:"Microsoft YaHei","Segoe UI";}')
+        result.setStyleSheet('QTextBrowser {color:#332644;background:transparent;border:0;}')
         base_height=150 if len(text)>180 or len(text.splitlines())>6 else 76
         result.setProperty('baseHeight',base_height);result.setFixedHeight(base_height)
         self.result_view=result
@@ -705,7 +714,7 @@ class Pet(QWidget):
     def show_about(self):
         QMessageBox.about(self,'关于白龙桌宠',
             '<h3>GPT白龙娘动态桌宠</h3>'
-            f'<p>分支版本：{VERSION}<br>原作者基线：v{BASE_VERSION}<br>分支：{BRANCH}</p>'
+            f'<p>分支版本：{platform_version()}<br>原作者基线：v{BASE_VERSION}<br>分支：{BRANCH}</p>'
             '<p>技术栈：Python · PySide6 / Qt · FFmpeg<br>角色素材：原作者 v0.5.1 素材</p>'
             '<p><a href="https://github.com/jingh12312-rgb/bailong-desktop-pet">原作者项目</a></p>')
     def set_sound_disabled(self,disabled):

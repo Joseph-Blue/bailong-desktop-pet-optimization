@@ -12,7 +12,7 @@ from version import VERSION
 def archive_build(output):
     """Archive the freshly built directory, without running the legacy release script."""
     arch = platform.machine().lower()
-    arch = {'amd64': 'x64', 'x86_64': 'x64', 'aarch64': 'arm64'}.get(arch, arch)
+    arch = {'amd64': 'x86_64', 'x64': 'x86_64', 'aarch64': 'arm64'}.get(arch, arch)
     name = output.parent.parent / f'bailong-desktop-pet-v{VERSION}-windows-{arch}'
     archive = Path(shutil.make_archive(str(name), 'zip', root_dir=output.parent,
                                       base_dir=output.name))

@@ -80,7 +80,9 @@ def run(root):
             conversation['turns'].append(turn);chat.active=conversation;chat.running_chat=conversation;chat.running_turn=turn
             chat.completed({'threadId':'offline-test','text':'检查结果\n'*30,'transcript':'检查结果\n'*30})
             assert any(b.text()=='详情' for b in pet.bubble.findChildren(__import__('PySide6.QtWidgets',fromlist=['QPushButton']).QPushButton))
-            assert chat.composer.size()==QSize(280,152)
+            assert chat.composer.width()>=chat.composer.minimumWidth()
+            assert chat.composer.height()>=chat.composer.minimumHeight()
+            assert chat.composer.editor.font().pointSizeF()>=12
             assert pet.mode=='task-celebration' and pet.current['id']=='18'
             assert len(pet.interaction_animations())==20
             chat.toggle() if not chat.enabled else None

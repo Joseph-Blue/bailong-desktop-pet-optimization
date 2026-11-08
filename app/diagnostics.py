@@ -18,9 +18,8 @@ from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
 
 from performance_metrics import (PlaybackStatistics, ProcessStatistics,
                                  byte_text, frame_cache_statistics, process_paging_rows)
-from diagnostic_identity import (HardwareProbe, desktop_status, cli_status,
-                                 display_architecture, desktop_summary)
-from version import VERSION
+from diagnostic_identity import HardwareProbe, desktop_status, cli_status, desktop_summary
+from version import platform_version
 from performance_ui import Columns, configure_window
 
 
@@ -389,7 +388,7 @@ class DiagnosticsWindow(QWidget):
 
     def update_identity(self):
         self.identity.set_rows([
-            ('版本', f'{VERSION} · {display_architecture(platform.machine())}'),
+            ('版本', platform_version()),
             ('进程', f'{os.path.basename(sys.executable)} · PID {os.getpid()}'),
             ('CPU', f'{self.hardware.cpu.strip()} · {self.statistics.cores} 个逻辑核心'),
             ('GPU', self.hardware.gpu),

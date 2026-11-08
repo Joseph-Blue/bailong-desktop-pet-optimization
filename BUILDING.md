@@ -1,6 +1,6 @@
 # 本机构建与实机测试
 
-本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.12`。与独立 Swift 工程无关。此仓库只保存源码和文档，不提供 Release；脚本只在本机生成测试产物，不推送、上传或自动启动应用。
+本分支为原作者 Python／PySide6／FFmpeg 项目的 `joseph/optimization` 分支，作者基线 `0.5.1`，当前 `0.5.1-opt.13`。本地脚本生成目录包与压缩包，GitHub Release 提供各平台下载。
 
 ## 所有平台先准备
 
@@ -66,7 +66,7 @@ winget install --id Python.Python.3.13 --exact
 5. 校验素材及 FFmpeg 的 `libvpx-vp9` 解码器，再用 PyInstaller 打包，整理素材、音效和解码器。
 6. 使用 `-Zip` 时压缩刚生成的整个 `BailongPet` 目录，校验 ZIP 并生成 SHA256 文件。
 
-`Get-Help .\build-windows.ps1 -Detailed` 可查看参数说明。脚本不会自动下载角色素材；请先按上文准备。FFmpeg 默认从 `imageio-ffmpeg` 的本机 wheel 取得，不需要按原作旧路径手工摆放。
+`Get-Help .\build-windows.ps1 -Detailed` 可查看参数说明。脚本不会自动下载角色素材；请先按上文准备。Windows 默认使用仓库内的 `tools/ffmpeg.exe` 精简解码器。
 
 也可从终端使用 `powershell.exe -NoProfile -File .\build-windows.ps1` 或 `pwsh -NoProfile -File .\build-windows.ps1`。如果下载文件被本机策略阻止，先检查脚本来源并按所在设备的执行策略处理；脚本不会修改执行策略。
 
@@ -74,9 +74,9 @@ winget install --id Python.Python.3.13 --exact
 
 维护此脚本时保存为 **UTF-8 with BOM**：Windows PowerShell 5.1 可能将无 BOM 的 UTF-8 脚本按系统代码页解读，导致中文错误或解析失败。脚本兼容两种 PowerShell 不代表支持旧版 Windows；Python、Qt 与 FFmpeg 的系统及架构要求仍需满足。
 
-虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.12/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
+虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.13/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.12-windows-x64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。ZIP 是本地测试包，不自动上传或创建 Release，也不调用旧脚本生成历史发行文案及许可证汇总。
+在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.13-windows-x86_64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；本分支 Release 使用新构建包，依赖许可一并收集。
 
 `build-windows.ps1` 调用独立的 `work/build_windows_optimized.py`，整理完整目录包。作者原版 `work/build_windows.py` 保留在原路径，继续与 `work/build_release.py` 搭配使用。两套入口并存，自动化入口不调用原发行脚本。
 
@@ -182,11 +182,42 @@ Linux 的全屏自动检测及跟随 Codex 启动未接入；不要把 Windows�
 
 opt.10 的 FFmpeg 在产物中只保留一份：Windows 使用 `tools/ffmpeg.exe`，macOS／Linux 通过相对符号链接复用 PyInstaller 收集的文件。移动 Linux 目录包时保留符号链接。
 
-Windows 使用 `work/hooks/windows/hook-PySide6.QtGui.py`，在依赖分析前排除 PDF 图片和 Qt 虚拟键盘插件，避免为它们收集 Qt PDF、QML／Quick 库；另排除 Pillow AVIF 解码器。本应用使用 Widgets、系统输入法、WebM／WebP 动画和 WAV 音效。软件 OpenGL、Qt 多媒体后端及原始素材继续保留。
+Windows 使用 `work/hooks/windows/hook-PySide6.QtGui.py`，在依赖分析前排除 PDF 图片和 Qt 虚拟键盘插件，避免为它们收集 Qt PDF、QML／Quick 库；另排除 Pillow AVIF 解码器。本应用使用 Widgets、系统输入法、WebM／WebP 动画和 WAV 音效。opt.13 另通过 `hook-PySide6.py` 排除软件 OpenGL `opengl32sw.dll`，保留 Qt 多媒体后端及原始素材。
 
-本机 opt.9 目录为 460.14 MiB，其中重复 FFmpeg 83.58 MiB，上述 Qt 插件依赖链 19.79 MiB，Pillow AVIF 扩展 7.47 MiB。按这些文件计算，opt.10 预计约 349.30 MiB；这是文件清单估算，实际值以新构建末尾输出为准。
+本机 opt.9 目录为 460.14 MiB，其中重复 FFmpeg 83.58 MiB，上述 Qt 插件依赖链 19.79 MiB，Pillow AVIF 扩展 7.47 MiB。本机 opt.11 目录实测 349.31 MiB。opt.13 将 FFmpeg 从 83.58 MiB 换为 2.00 MiB，并移除约 19.68 MiB 软件 OpenGL；随包补齐依赖许可。最终大小见 Release。
 
 解码器仅一份、相对链接目标、插件过滤和构建入口接线已用本地脚本检查；这些新增验证脚本不随源码追踪。新包运行验收包括动画透明边缘、WebP 后备路径、中文输入、点击音效和系统主题。
+
+## 精简 FFmpeg
+
+Windows x86_64 解码器随仓库追踪：`tools/ffmpeg.exe`、`tools/ffmpeg-build.json`、`tools/ffmpeg-licenses/`。直接运行 PowerShell 构建入口即可使用。`-FFmpeg` 参数和 `BAILONG_BUILD_FFMPEG` 环境变量仍可覆盖选择。
+
+精简版固定为 FFmpeg 7.1.5 + libvpx 1.17.0，包含 WebM / VP9 透明解码、缩放、帧率调整、RGBA 输出和本地文件／管道输入输出。其他格式转码、网络协议与音频处理未编译；点击音效仍由原平台音效路径播放。
+
+重编译需要 Linux／WSL 或 macOS、Python 3.12+、C 编译器、make、pkg-config、Perl；x86_64 还需要 NASM。Windows 目标另需 MinGW-w64 x86_64 工具链。编译脚本下载并校验固定源码，产物放在 `.build-ffmpeg/`，不安装系统工具。
+
+```bash
+# WSL：生成 Windows x86_64 解码器
+python3 work/build_minimal_ffmpeg.py --target windows-x86_64
+
+# Linux / macOS：生成当前系统与架构的解码器
+python3 work/build_minimal_ffmpeg.py
+```
+
+Windows 输出位于 `.build-ffmpeg/windows-x86_64/bin/`。更新仓库解码器时，将其中 `ffmpeg.exe`、`ffmpeg-build.json` 与 `ffmpeg-licenses/` 一起复制到 `tools/`，再运行 Windows 打包脚本。macOS arm64 输出为 `.build-ffmpeg/darwin-arm64/bin/ffmpeg`；Linux x86_64 输出为 `.build-ffmpeg/linux-x86_64/bin/ffmpeg`，通过 `--ffmpeg` 传给对应打包入口。
+
+## 自动构建其他平台
+
+GitHub Actions 的 **Build macOS and Linux packages** 工作流接受 Release 标签，从该版本 Windows 包提取原始动画，再分别编译和打包：
+
+| 产物 | 构建环境 |
+| --- | --- |
+| macOS arm64 | macOS 15 Apple Silicon |
+| Linux Debian / Ubuntu x86_64 | Debian 12 |
+| Linux Fedora / RHEL x86_64 | Rocky Linux 9 |
+| Linux Arch x86_64 | Arch Linux |
+
+每项构建执行 EXE／可执行文件内置离线自检，随附件提供检查报告和 SHA256。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。GUI 检查采用离屏模式，原生桌面的置顶、输入法和 Wayland 行为需在相应桌面验证。
 
 ## 性能设置
 

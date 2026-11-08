@@ -1,0 +1,26 @@
+{
+  "ffmpeg": "7.1.5",
+  "libvpx": "1.17.0",
+  "target": "windows-x86_64",
+  "binarySha256": "94e171d1e14f85c567ba587e1fbe79003dcfa274c6430eb6387faf024542d8ea",
+  "sources": [
+    {
+      "name": "ffmpeg",
+      "version": "n7.1.5",
+      "url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/refs/tags/n7.1.5",
+      "sha256": "e3963a50831c985933e1a625ed566ec4c7adb5c012c34fa9f84438e1d61bdacc",
+      "directory": "FFmpeg-n7.1.5"
+    },
+    {
+      "name": "libvpx",
+      "version": "v1.17.0",
+      "url": "https://codeload.github.com/webmproject/libvpx/tar.gz/refs/tags/v1.17.0",
+      "sha256": "1020f184046187baa2985dbde38e0691f49c44088bca7a1842b0236c6081dc0a",
+      "directory": "libvpx-1.17.0"
+    }
+  ],
+  "configuration": "--prefix=/mnt/d/Users/joewu/Documents/CodexWorkspace/bailong-desktop-pet-optimization/.build-ffmpeg/windows-x86_64 --target-os=mingw32 --arch=x86_64 --enable-cross-compile --cross-prefix=x86_64-w64-mingw32- --pkg-config=pkg-config --disable-autodetect --disable-everything --disable-doc --disable-debug --disable-ffplay --disable-ffprobe --disable-network --disable-avdevice --disable-postproc --disable-swresample --disable-shared --enable-static --enable-small --enable-ffmpeg --enable-libvpx --enable-decoder=libvpx_vp9 --enable-demuxer=matroska --enable-protocol='file,pipe' --enable-encoder=rawvideo --enable-muxer=rawvideo --enable-filter='scale,fps,format' --enable-swscale --extra-cflags=-I/mnt/d/Users/joewu/Documents/CodexWorkspace/bailong-desktop-pet-optimization/.build-ffmpeg/windows-x86_64/include --extra-ldflags='-L/mnt/d/Users/joewu/Documents/CodexWorkspace/bailong-desktop-pet-optimization/.build-ffmpeg/windows-x86_64/lib -static'",
+  "recipe": "work/build_minimal_ffmpeg.py --target windows-x86_64",
+  "compiler": "GCC 13.2.0 MinGW-w64 / Ubuntu 24.04",
+  "validation": "35 animations: identical full RGBA output at 512x512; 256/15, 384/20, 720/24; cancellation"
+}

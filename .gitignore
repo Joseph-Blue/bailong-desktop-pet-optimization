@@ -3,7 +3,10 @@
 .DS_Store
 dist-macos/
 dist-linux/
-tools/
+tools/*
+!tools/ffmpeg.exe
+!tools/ffmpeg-build.json
+!tools/ffmpeg-licenses/
 docs/实施记录.md
 __pycache__/
 *.pyc
