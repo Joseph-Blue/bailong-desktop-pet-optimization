@@ -10,7 +10,7 @@
 
 opt.23 修复任务气泡空白、性能设置改为即时生效、关闭角色窗口系统阴影，并为构建接入素材自动下载；应用包尚未构建或发布。
 
-素材由 **jingh12312-rgb** 原作者提供。本仓库的[独立素材包](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.1)仅整理原始动画、清单及来源说明。有 GitHub 登录时自动使用该包；没有登录时自动提取作者公开 v0.5.1 完整包中的 `outputs`。另外提供仅替换四段动画的[修复备选包](docs/修复素材备选包.md)。Windows EXE 与 macOS App 图标统一使用修复 idle 的第一帧。详见 [素材来源](ASSETS.md)。
+素材由 **jingh12312-rgb** 原作者提供。本仓库的[独立素材包](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.1)仅整理原始动画、清单及来源说明。所有构建脚本默认使用仅替换四段动画的[修复素材包](docs/修复素材备选包.md)，原始包保留供手动选择。下载私有仓库附件需要具有仓库读取权限的 GitHub 登录或 token。Windows EXE 与 macOS App 图标统一使用修复 idle 的第一帧。详见 [素材来源](ASSETS.md)。
 
 ## 实现变化
 
@@ -73,7 +73,7 @@ Linux 短音效使用系统 `paplay`，Debian/Ubuntu、Fedora 安装 `pulseaudio
 | `app/diagnostics.py`、`app/performance_metrics.py` | 统计窗口与资源采样 |
 | `app/chat_ui.py`、`app/task_activity.py` | 对话界面与临时工具进度 |
 | `work/build_common.py` | 共用打包、资源和许可文件整理 |
-| `work/fetch_release_assets.py`、`work/package_assets.py` | 自动补齐原作者素材、生成带来源说明的独立素材包 |
+| `work/fetch_release_assets.py`、`work/package_assets.py` | 默认准备四段修复素材、生成带原作者来源说明的独立素材包 |
 | `work/build_minimal_ffmpeg.py` | 固定源码版本、记录来源、编译精简解码器 |
 
 ## 数据与来源

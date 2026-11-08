@@ -8,10 +8,10 @@
 - 独立素材包：https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.1
 - 修复备选包：https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.repaired.1
 
-原始包保留全部原始动画；修复备选包仅替换 idle、idle2、drag、landing 四段，其余 31 段保持原样。修复使用本项目 2026-11-07 的 Alpha 清理结果，以无损 APNG 分发；来源、范围和使用方法见 [修复素材备选包](docs/修复素材备选包.md)。默认自动下载仍选择原始包。
+原始包保留全部原始动画；修复备选包仅替换 idle、idle2、drag、landing 四段，其余 31 段保持原样。修复使用本项目 2026-11-07 的 Alpha 清理结果，以无损 APNG 分发；来源、范围和使用方法见 [修复素材备选包](docs/修复素材备选包.md)。所有构建脚本默认使用修复包；本地仍是原始清单时自动切换四段播放文件，原始动画文件保留。
 
 Windows EXE 与 macOS App 图标使用同批修复 idle 的第一帧。`app/icons/repaired-idle.png` 为该帧原样副本，构建时导出 ICO／ICNS，不重绘角色、不增加底色或阴影。
 
 原作者说明：素材随 Releases 发布，不纳入 Git 历史。35 段动画来自项目作者提供的角色素材及透明处理版本。未额外授予美术素材商用或再分发许可。
 
-缺少素材时构建脚本自动获取；已有素材文件不会覆盖。有 GitHub 登录时使用本仓库素材包，没有登录时使用原作者公开完整包中的 `outputs`。本仓库为私有仓库，素材包访问权限沿用仓库设置。
+构建脚本默认获取本仓库修复包；原版清单自动切换，已有动画文件保留。本仓库为私有仓库，下载需要具有读取权限的 GitHub 登录或 token，素材包访问权限沿用仓库设置。

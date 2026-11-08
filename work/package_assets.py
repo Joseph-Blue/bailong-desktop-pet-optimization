@@ -1,10 +1,10 @@
-"""Package original artwork or the explicitly selected four-animation repair set."""
+"""Package the repaired artwork and original-author attribution."""
 import argparse
 import json
 from pathlib import Path
 import zipfile
 
-from fetch_release_assets import ROOT, ASSET_NAME, ensure_assets, animation_items, animation_paths
+from fetch_release_assets import ROOT, ASSET_NAME, ensure_assets, animation_items, animation_paths, uses_repaired_animations
 
 
 def main():
@@ -26,15 +26,16 @@ def main():
                 item['playbackFile'] = f"修复APNG/{item['id']}.png"
                 replacements[item['playbackFile']] = source
     paths = animation_paths(data)
-    name = 'bailong-repaired-v0.5.1-assets.zip' if replacements else ASSET_NAME
+    repaired = uses_repaired_animations(data)
+    name = ASSET_NAME if repaired else 'bailong-original-v0.5.1-assets.zip'
     output = ROOT / '.build/assets' / name
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_STORED) as bundle:
         attribution = (ROOT / 'ASSETS.md').read_text(encoding='utf-8')
-        if replacements:
+        if repaired:
             attribution = attribution.replace('(docs/修复素材备选包.md)', '(修复素材说明.md)')
         bundle.writestr('素材来源.md', attribution)
-        if replacements:
+        if repaired:
             bundle.writestr('outputs/白龙桌宠素材/素材清单.json',
                             json.dumps(data, ensure_ascii=False, indent=2) + '\n')
             instructions = (ROOT / 'docs/修复素材备选包.md').read_text(encoding='utf-8')

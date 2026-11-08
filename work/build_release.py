@@ -1,15 +1,16 @@
 """Create an audited source ZIP and a self-contained Windows onedir ZIP."""
 from pathlib import Path
 from importlib.metadata import distribution
-import ast,html,json,shutil,zipfile,hashlib,sys
+import ast,html,json,shutil,zipfile,sys
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app'))
 from version import VERSION
-from fetch_release_assets import ensure_assets
+from fetch_release_assets import ensure_assets, animation_paths
 ensure_assets()
 OUT=ROOT/'dist-windows'
-webm=json.loads((ROOT/'outputs/白龙桌宠素材/素材清单.json').read_text(encoding='utf-8'))['idle'].get('playbackFile','').endswith('.webm')
+# 修复包混用 APNG 与 WebM，不能只看 idle 决定是否携带解码器。
+webm=any(Path(p).suffix.lower()=='.webm' for p in animation_paths(json.loads((ROOT/'outputs/白龙桌宠素材/素材清单.json').read_text(encoding='utf-8'))))
 edition='-webm' if webm else ''
 stage=OUT/f'release-v{VERSION}{edition}'
 source=stage/'repository/bailong-desktop-pet';portable=stage/'windows/BailongPet'
@@ -125,7 +126,7 @@ pyi_license=ROOT/'.build/tools/pyinstaller-6.22.3.dist-info/licenses/COPYING.txt
 if pyi_license.exists():shutil.copy2(pyi_license,licenses/'PyInstaller-COPYING.txt')
 (licenses/'说明.txt').write_text('本文件夹保留随包运行库的许可文本。源码项目和美术素材的许可另见ASSETS.md。Qt/PySide来源：https://download.qt.io/official_releases/QtForPython/ 和 https://download.qt.io/official_releases/qt/6.9/ 。\n',encoding='utf-8')
 
-info={'version':VERSION,'architecture':'Windows x64','animationCount':len(items),'sourceSHA256':{name:hashlib.sha256((ROOT/'app'/name).read_bytes()).hexdigest() for name in modules}}
+info={'version':VERSION,'architecture':'Windows x64','animationCount':len(items)}
 for folder in [source,portable]:
     (folder/'VERSION.txt').write_text(VERSION+'\n',encoding='ascii')
     (folder/'BUILD_INFO.json').write_text(json.dumps(info,ensure_ascii=False,indent=2),encoding='utf-8')
@@ -140,4 +141,3 @@ for folder,suffix in [(portable,'windows-x64'+edition)]:
                 zip.write(p,p.relative_to(folder.parent))
     with zipfile.ZipFile(zip_path) as zip:assert zip.testzip() is None
     archives.append(zip_path);print(zip_path.name,round(zip_path.stat().st_size/1048576,2),'MiB',flush=True)
-(OUT/f'SHA256SUMS-v{VERSION}{edition}.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in archives),encoding='ascii')

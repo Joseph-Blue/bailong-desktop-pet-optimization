@@ -1,4 +1,4 @@
-"""Fetch missing original artwork; keep existing local files unchanged."""
+"""Prepare the repaired artwork release used by all application builds."""
 import json
 import os
 from pathlib import Path
@@ -12,8 +12,24 @@ ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_REPOSITORY = 'jingh12312-rgb/bailong-desktop-pet'
 UPSTREAM_TAG = 'v0.5.1'
 ASSET_REPOSITORY = 'Joseph-Blue/bailong-desktop-pet-optimization'
-ASSET_TAG = 'v0.5.1-opt.assets.1'
-ASSET_NAME = 'bailong-original-v0.5.1-assets.zip'
+ASSET_TAG = 'v0.5.1-opt.assets.repaired.1'
+ASSET_NAME = 'bailong-repaired-v0.5.1-assets.zip'
+REPAIRED_IDS = ('idle', 'idle2', 'drag', 'landing')
+
+
+def uses_repaired_animations(manifest):
+    paths = {item['id']: item.get('playbackFile') for item in animation_items(manifest)}
+    return all(paths.get(name) == f'修复APNG/{name}.png' for name in REPAIRED_IDS)
+
+
+def repaired_release_selected():
+    return (asset_release_tag() == ASSET_TAG
+            and (os.environ.get('ASSET_FILE_NAME') or ASSET_NAME) == ASSET_NAME)
+
+
+def asset_release_tag():
+    return os.environ.get('ASSET_RELEASE_TAG') or (
+        UPSTREAM_TAG if os.environ.get('ASSET_REPOSITORY') == UPSTREAM_REPOSITORY else ASSET_TAG)
 
 
 def animation_items(manifest):
@@ -36,6 +52,8 @@ def missing_assets():
     if not manifest_path.is_file():
         return [manifest_path]
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
+    if repaired_release_selected() and not uses_repaired_animations(manifest):
+        return [manifest_path]
     return [assets / relative for relative in sorted(animation_paths(manifest))
             if not (assets / relative).is_file()]
 
@@ -53,9 +71,9 @@ def download_assets():
     use_gh = bool(not token and shutil.which('gh') and subprocess.run(
         ['gh', 'auth', 'status', '--hostname', 'github.com'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
-    repository = os.environ.get('ASSET_REPOSITORY') or (ASSET_REPOSITORY if token or use_gh else UPSTREAM_REPOSITORY)
-    tag = os.environ.get('ASSET_RELEASE_TAG') or (ASSET_TAG if repository == ASSET_REPOSITORY else UPSTREAM_TAG)
-    print(f'缺少动画素材，从 {repository} / {tag} 获取；原作者：{UPSTREAM_REPOSITORY}。', flush=True)
+    repository = os.environ.get('ASSET_REPOSITORY') or ASSET_REPOSITORY
+    tag = asset_release_tag()
+    print(f'准备动画素材，从 {repository} / {tag} 获取；原作者：{UPSTREAM_REPOSITORY}。', flush=True)
     headers = {'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
@@ -66,12 +84,13 @@ def download_assets():
         request = urllib.request.Request(f'https://api.github.com/repos/{repository}/releases/tags/{tag}', headers=headers)
         with urllib.request.urlopen(request, timeout=60) as response:
             release = json.load(response)
-    asset = next((item for item in release['assets'] if item['name'] == ASSET_NAME), None)
-    if asset is None:
+    asset_name = os.environ.get('ASSET_FILE_NAME') or ASSET_NAME
+    asset = next((item for item in release['assets'] if item['name'] == asset_name), None)
+    if asset is None and repository == UPSTREAM_REPOSITORY:
         asset = next((item for item in release['assets']
                       if item['name'].endswith(('-windows-x64-webm.zip', '-windows-x86_64.zip'))), None)
     if asset is None:
-        raise RuntimeError(f'{repository} / {tag} 没有素材 ZIP 或原版完整 Windows ZIP。')
+        raise RuntimeError(f'{repository} / {tag} 没有素材附件 {asset_name}。')
     work = ROOT / '.build/downloads'
     work.mkdir(parents=True, exist_ok=True)
     # 下载成功才留下缓存，避免下次构建使用中断的 ZIP。
@@ -97,7 +116,8 @@ def download_assets():
             destination = (ROOT / name).resolve()
             if not destination.is_relative_to((ROOT / 'outputs').resolve()):
                 raise ValueError(f'Invalid asset path: {item.filename}')
-            if destination.exists():
+            # 原版迁移到修复版时必须一并更新清单；保留已有动画文件。
+            if destination.exists() and name != 'outputs/白龙桌宠素材/素材清单.json':
                 continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             with bundle.open(item) as source, destination.open('wb') as out:

@@ -46,19 +46,18 @@ Windows 使用 PowerShell，其他平台使用 Bash。共同参数如下：
 
 ## 素材自动下载
 
-Windows PowerShell、macOS Bash、三类 Linux Bash 入口及对应 Python 构建入口共用 `work/fetch_release_assets.py`。作者原有 `work/build_windows.py` 与 `work/build_release.py` 也接入该逻辑。已有清单及全部引用动画时不联网；缺少清单或任一动画时下载一次，只补缺失文件。RPM 和压缩脚本使用已生成的完整目录包，不另下载源素材。
+Windows PowerShell、macOS Bash、三类 Linux Bash 入口及对应 Python 构建入口共用 `work/fetch_release_assets.py`。作者原有 `work/build_windows.py` 与 `work/build_release.py` 也接入该逻辑。默认使用四段 Alpha 修复包。已有修复清单及全部引用动画时不联网；本地仍是原版清单或缺少素材时下载修复包，更新清单并补齐缺失动画，保留已有原始动画。RPM 和压缩脚本使用已生成的完整目录包，不另下载源素材。
 
-- 存在 `GH_TOKEN`／`GITHUB_TOKEN`，或已用 GitHub CLI 登录时，默认下载本私有仓库的 **`v0.5.1-opt.assets.1`** 素材包，需要该账号具有仓库读取权限。
-- 没有 GitHub 登录时，自动下载作者公开 **v0.5.1** Windows 完整 ZIP，只提取 `outputs`，不安装或运行其中程序。
-- 下载包保留在 `.build/downloads/`。可用 `ASSET_REPOSITORY` 和 `ASSET_RELEASE_TAG` 显式选择素材来源；访问错误直接报出，不隐藏失败。
+- 默认下载本私有仓库 **`v0.5.1-opt.assets.repaired.1`** 的 `bailong-repaired-v0.5.1-assets.zip`。使用 `GH_TOKEN`／`GITHUB_TOKEN` 或 GitHub CLI 登录，账号需要仓库读取权限。未登录时不会改用原版素材。
+- 下载包保留在 `.build/downloads/`。可用 `ASSET_REPOSITORY`、`ASSET_RELEASE_TAG` 和 `ASSET_FILE_NAME` 显式选择素材来源；访问错误直接报出，不隐藏失败。
 - `--skip-install`／`-SkipInstall` 只跳过依赖安装；要离线构建，先准备完整素材及依赖。
 - GitHub Actions 继续使用当前仓库 token，下载相同素材包。素材、账号数据和下载缓存不提交 Git。
 
-单独准备素材：`python work/fetch_release_assets.py`。重新制作独立素材 ZIP：`python work/package_assets.py`，输出 `.build/assets/bailong-original-v0.5.1-assets.zip`；只包含清单引用的原始动画、素材清单和作者来源说明，不包含程序或运行库。来源与原作者说明见 [ASSETS.md](ASSETS.md)。
+单独准备素材：`python work/fetch_release_assets.py`。重新制作独立素材 ZIP：`python work/package_assets.py`，默认输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；只包含清单引用的 31 段原始 WebM、4 段修复 APNG、素材清单和作者来源说明，不包含程序或运行库。来源与原作者说明见 [ASSETS.md](ASSETS.md)。
 
 ## 修复备选素材与应用图标
 
-默认自动下载仍使用原始包。需要替换四段修复动画时，按 [修复素材备选包说明](docs/修复素材备选包.md) 放入完整备选目录和清单；已有引用文件齐全时不会重新下载。备选包包含 31 段原始 WebM 与 4 段无损 APNG，播放走现有 FFmpeg／Pillow 路径。
+默认自动下载使用修复包。离线准备时，按 [修复素材备选包说明](docs/修复素材备选包.md) 放入完整修复目录和清单；已有修复清单及引用文件齐全时不会重新下载。备选包包含 31 段原始 WebM 与 4 段无损 APNG，播放走现有 FFmpeg／Pillow 路径。
 
 重新封装备选包：`python work/package_assets.py --repaired-animations /path/to/animations`，该目录应包含 `idle.png`、`idle2.png`、`drag.png`、`landing.png` 四个 APNG。输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；原始包不会覆盖。
 

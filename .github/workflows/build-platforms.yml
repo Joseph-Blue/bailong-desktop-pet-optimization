@@ -33,7 +33,7 @@ jobs:
         with:
           python-version: '3.13'
           architecture: x64
-      - name: Prepare original assets
+      - name: Prepare repaired assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: python work/fetch_release_assets.py
@@ -57,7 +57,7 @@ jobs:
         with:
           python-version: '3.13'
           architecture: arm64
-      - name: Prepare assets
+      - name: Prepare repaired assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: python work/fetch_release_assets.py
@@ -110,7 +110,7 @@ jobs:
         run: |
           uv python install 3.13
           uv venv --python 3.13 --seed .build/venvs/ci-bootstrap
-      - name: Prepare assets
+      - name: Prepare repaired assets
         env:
           GH_TOKEN: ${{ github.token }}
           PYTHON: ${{ matrix.family == 'debian' && 'python3' || '.build/venvs/ci-bootstrap/bin/python3.13' }}
