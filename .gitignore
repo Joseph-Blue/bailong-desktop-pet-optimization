@@ -34,3 +34,6 @@ work/video-deps/
 /work/test_build_size.py
 /work/test_build_windows.py
 /work/test_build_windows_package.py
+
+# Removed obsolete upstream macOS guide
+/MAC适配说明.md

@@ -70,7 +70,7 @@ def copy_resources(destination, inputs):
         shutil.copy2(assets / relative, output)
     (target / '素材清单.json').write_text(json.dumps(manifest, ensure_ascii=False), encoding='utf-8')
     shutil.copytree(ROOT / 'app/sounds', destination / 'app/sounds', dirs_exist_ok=True)
-    for name in ('README.md', 'CHANGELOG.md', 'ASSETS.md', 'BUILDING.md', 'DEVELOPMENT.md', 'MAC适配说明.md', '优化说明.md'):
+    for name in ('README.md', 'CHANGELOG.md', 'ASSETS.md', 'BUILDING.md', 'DEVELOPMENT.md', '优化说明.md'):
         shutil.copy2(ROOT / name, destination / name)
     (destination / 'docs').mkdir(exist_ok=True)
     for name in ('原作者版本改动对照.md', '修复素材备选包.md'):

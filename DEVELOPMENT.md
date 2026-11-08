@@ -49,6 +49,5 @@ macOS 默认复用 `.build/ffmpeg/darwin-<架构>/bin/ffmpeg`，缺失时自动�
 - [README](README.md)：当前交付范围、下载与快速入口。
 - [改动对照](docs/原作者版本改动对照.md)：只对照作者 v0.5.1 的最终改动。
 - [BUILDING](BUILDING.md)：Windows／macOS 的构建、素材和发布。
-- [MAC适配说明](MAC适配说明.md)：macOS 平台差异与验收边界。
 - [ASSETS](ASSETS.md)、[修复素材说明](docs/修复素材备选包.md)：来源、替换范围与参数。
 - [CHANGELOG](CHANGELOG.md)：保留历史迭代，当前支持范围以 README 为准。

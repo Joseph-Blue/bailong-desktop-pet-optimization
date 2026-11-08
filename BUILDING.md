@@ -74,8 +74,6 @@ Bash 与 Python 入口都默认使用 `.build/ffmpeg/darwin-<架构>/bin/ffmpeg`
 - 构建后执行本地 ad-hoc 签名，归档保留应用目录结构；未做 Apple 公证。
 - 当前发布与本轮构建目标为 Apple Silicon。Intel 本机架构构建能力保留，但不提供本轮 Intel Release 附件，也未做 Intel 实机验收。
 
-macOS 的数据目录、全屏与填充区别见 [MAC适配说明](MAC适配说明.md)。
-
 ## 低层入口与输出
 
 已准备依赖的环境可直接运行：
