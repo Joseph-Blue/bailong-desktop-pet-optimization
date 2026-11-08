@@ -131,7 +131,7 @@ def build_desktop(target, family=None, ffmpeg_arg=None):
                             'export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"\n'
                             'exec ./BailongPet "$@"\n', encoding='utf-8')
         launcher.chmod(0o755)
-    print(f'本机构建完成：{output}\n实机验收按 BUILDING.md 记录；未上传或发布。', flush=True)
+    print(f'构建完成：{output}', flush=True)
     return output
 
 

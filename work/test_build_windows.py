@@ -163,6 +163,8 @@ $restored = ((Get-Location).Path -eq $oldLocation) -and
                     status, stages = self.run_case(host, fail=failure)
                     self.assertFalse(status['ok'], status)
                     self.assertIn('23', status['message'])
+                    if failure == 'check':
+                        self.assertIn('winget install --id Python.Python.3.13 --exact', status['message'])
                     self.assertEqual(stages, expected)
 
     def test_skip_install_requires_existing_environment(self):

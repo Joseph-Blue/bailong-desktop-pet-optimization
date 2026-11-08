@@ -5,19 +5,37 @@ import os
 import platform
 import sys
 import time
+from html import escape
+from pathlib import Path, PureWindowsPath
+import re
 import psutil
 
-from PySide6.QtCore import Qt, QTimer, QPointF, QRectF
-from PySide6.QtGui import QFont, QPainter, QPainterPath, QPalette, QPen
+from PySide6.QtCore import Qt, QTimer, QPointF, QRectF, QUrl
+from PySide6.QtGui import QFont, QPainter, QPainterPath, QPalette, QPen, QDesktopServices
 from PySide6.QtWidgets import (QApplication, QWidget, QLabel, QVBoxLayout,
                                QHBoxLayout, QScrollArea, QDialogButtonBox, QCheckBox,
-                               QGroupBox, QFormLayout)
+                               QFrame, QGridLayout, QSizePolicy, QToolButton, QDialog, QTextBrowser)
 
 from performance_metrics import (PlaybackStatistics, ProcessStatistics,
                                  byte_text, frame_cache_statistics)
-from diagnostic_identity import HardwareProbe, desktop_status, cli_status
+from diagnostic_identity import (HardwareProbe, desktop_status, cli_status,
+                                 display_architecture, desktop_summary)
 from version import VERSION
 from performance_ui import Columns, configure_window
+
+
+def linked_details(text):
+    lines = []
+    for line in text.splitlines():
+        match = re.fullmatch(r'([^：]*：)((?:[A-Za-z]:[\\/]|/).+)', line)
+        if match:
+            prefix, path = match.groups()
+            parent = PureWindowsPath(path).parent if re.match(r'^[A-Za-z]:', path) else Path(path).parent
+            url = QUrl.fromLocalFile(str(parent)).toString(QUrl.ComponentFormattingOption.FullyEncoded)
+            lines.append(f'{escape(prefix)}<a href="{escape(url, quote=True)}">{escape(path)}</a>')
+        else:
+            lines.append(escape(line))
+    return '<br>'.join(lines)
 
 
 class FPSGraph(QWidget):
@@ -54,33 +72,93 @@ class FPSGraph(QWidget):
         painter.drawPath(path)
 
 
-class InfoSection(QGroupBox):
-    def __init__(self, title):
-        super().__init__(title)
-        self.form = QFormLayout(self)
-        self.form.setHorizontalSpacing(18)
-        self.form.setVerticalSpacing(8)
-        self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
-        self.form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        self.labels = {}
+class ElidedValue(QLabel):
+    """One visible line; QLabel retains the complete accessible text."""
+    def __init__(self):
+        super().__init__()
+        self.setTextFormat(Qt.TextFormat.PlainText)
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
 
-    def set_rows(self, rows):
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+        text = self.fontMetrics().elidedText(self.text().replace('\n', ' · '),
+                                            Qt.TextElideMode.ElideRight, self.width())
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, text)
+
+
+class InfoSection(QWidget):
+    def __init__(self, title):
+        super().__init__()
+        self.heading = title
+        self.rows = []
+        self.labels = {}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        header = QHBoxLayout()
+        name = QLabel(title)
+        font = QFont(name.font())
+        font.setWeight(QFont.Weight.DemiBold)
+        name.setFont(font)
+        header.addWidget(name)
+        header.addStretch()
+        details = QToolButton()
+        details.setAutoRaise(True)
+        details.setText('详情')
+        details.setAccessibleName(title + '详情')
+        details.clicked.connect(self.show_details)
+        header.addWidget(details)
+        layout.addLayout(header)
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        layout.addWidget(line)
+        self.grid = QGridLayout()
+        self.grid.setHorizontalSpacing(12)
+        self.grid.setVerticalSpacing(6)
+        self.grid.setColumnStretch(1, 1)
+        layout.addLayout(self.grid)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+
+    def set_rows(self, rows, summaries=None):
+        self.rows = rows
         if tuple(self.labels) != tuple(name for name, _ in rows):
-            while self.form.rowCount():
-                self.form.removeRow(0)
+            while self.grid.count():
+                self.grid.takeAt(0).widget().deleteLater()
             self.labels.clear()
-            for name, _ in rows:
-                label = QLabel()
-                label.setWordWrap(True)
-                label.setTextFormat(Qt.TextFormat.PlainText)
-                label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            for index, (name, _) in enumerate(rows):
+                caption = QLabel(name)
+                caption.setMinimumWidth(self.fontMetrics().horizontalAdvance('汉') * 7)
+                label = ElidedValue()
                 self.labels[name] = label
-                self.form.addRow(name, label)
+                self.grid.addWidget(caption, index, 0)
+                self.grid.addWidget(label, index, 1)
         for name, value in rows:
-            self.labels[name].setText(str(value))
+            self.labels[name].setText(str((summaries or {}).get(name, value)))
+            self.labels[name].setToolTip(str(value))
+            self.labels[name].setAccessibleDescription(str(value))
 
     def text(self):
-        return self.title() + '\n' + '\n'.join(f'{name}：{label.text()}' for name, label in self.labels.items())
+        return self.heading + '\n' + '\n'.join(f'{name}：{value}' for name, value in self.rows)
+
+    def show_details(self):
+        dialog = QDialog(self.window())
+        configure_window(dialog)
+        dialog.setWindowTitle(self.heading + '详情')
+        dialog.resize(640, 420)
+        layout = QVBoxLayout(dialog)
+        content = QTextBrowser()
+        content.setHtml(linked_details(self.text()))
+        content.setOpenLinks(False)
+        content.anchorClicked.connect(lambda url: QDesktopServices.openUrl(url) if url.isLocalFile() else None)
+        layout.addWidget(content)
+        buttons = QDialogButtonBox()
+        copy = buttons.addButton('复制信息', QDialogButtonBox.ButtonRole.ActionRole)
+        copy.clicked.connect(lambda: QApplication.clipboard().setText(content.toPlainText()))
+        layout.addWidget(buttons)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.show()
 
 
 class DiagnosticsWindow(QWidget):
@@ -91,7 +169,7 @@ class DiagnosticsWindow(QWidget):
         self.root = root
         self.setWindowTitle('性能统计')
         self.setWindowIcon(pet.windowIcon())
-        self.resize(1000, 720)
+        self.resize(960, 740)
         self.setMinimumSize(440, 360)
         self.changing_pin = False
         self.statistics = ProcessStatistics()
@@ -107,16 +185,19 @@ class DiagnosticsWindow(QWidget):
         QApplication.instance().aboutToQuit.connect(self.hardware.stop)
 
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 16, 20, 16)
+        outer.setSpacing(16)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         body = QWidget()
         content = QVBoxLayout(body)
-        content.setSpacing(12)
+        content.setContentsMargins(0, 0, 8, 0)
+        content.setSpacing(16)
         metrics = QHBoxLayout()
         self.values = []
-        for title, scale in (('FPS', 1.333 ** 3), ('最高', 1.333 ** 2), ('最低', 1.333 ** 2)):
-            column = QVBoxLayout()
+        for title, scale in (('FPS', 1.333 ** 2), ('最高', 1.333 ** 2), ('最低', 1.333 ** 2)):
+            column = QHBoxLayout()
             column.addWidget(QLabel(title))
             value = QLabel('—')
             font = QFont(self.font())
@@ -125,6 +206,7 @@ class DiagnosticsWindow(QWidget):
             value.setFont(font)
             value.setAccessibleName(title)
             column.addWidget(value)
+            column.addStretch()
             metrics.addLayout(column, 1)
             self.values.append(value)
         content.addLayout(metrics)
@@ -139,7 +221,7 @@ class DiagnosticsWindow(QWidget):
                                  (right, (self.identity, self.connections))):
             group = QVBoxLayout(column)
             group.setContentsMargins(0, 0, 0, 0)
-            group.setSpacing(12)
+            group.setSpacing(18)
             for section in sections:
                 group.addWidget(section)
             group.addStretch()
@@ -251,7 +333,6 @@ class DiagnosticsWindow(QWidget):
                     f' · {number(cpu)}%（单核）')
         if process.cpu_error:
             cpu_text = f'CPU 读取失败：{process.cpu_error}'
-        ram_scope = '物理占用' if self.statistics.mac else 'RSS'
         ram = byte_text(process.ram) if not process.memory_error else process.memory_error
         gpu_text = f'{gpu:.2f}%' if gpu is not None else process.gpu_status
         swapins = (f'累计 {byte_text(process.swapins)}' if process.swapins else '未观察到换入')
@@ -264,9 +345,9 @@ class DiagnosticsWindow(QWidget):
         total_ram = (process.ram + decoder_ram
                      if process.ram is not None and decoder_ram is not None else None)
         resources = [
-            ('桌宠 RAM', f'{byte_text(total_ram)}（主进程 + FFmpeg）'),
-            ('主进程 RAM', f'{ram} · {ram_scope}'),
-            ('FFmpeg RAM', f'{byte_text(decoder_ram)} · {ram_scope}'),
+            ('桌宠 RAM', byte_text(total_ram)),
+            ('主进程 RAM', ram),
+            ('FFmpeg RAM', byte_text(decoder_ram)),
             ('主进程 CPU', cpu_text),
             ('FFmpeg', decoder_text)]
         if self.statistics.mac:
@@ -288,19 +369,22 @@ class DiagnosticsWindow(QWidget):
         sync = pet.desktop_sync
         watching = '观察中' if sync.timer.isActive() else '已停止'
         worker = pet.chat.worker if pet.chat else None
+        desktop = desktop_status()
+        cli = cli_status(pet)
         self.connections.set_rows([
-            ('桌面端', desktop_status()),
+            ('桌面端', desktop),
             ('只读同步', f'{watching} · 执行中 {len(sync.running)} · 已观察 {len(sync.known)}'),
             ('连续读取失败', f'{sync.errors} 次'),
-            ('内置 CLI', cli_status(pet)),
+            ('内置 CLI', cli),
             ('额度查询', '执行中' if pet.quota_inflight else '空闲'),
-            ('内置任务', '执行中' if worker and worker.isRunning() else '空闲')])
+            ('内置任务', '执行中' if worker and worker.isRunning() else '空闲')],
+            {'桌面端': desktop_summary(desktop), '内置 CLI': cli.splitlines()[0]})
 
     def update_identity(self):
         self.identity.set_rows([
-            ('版本', f'{VERSION} · {platform.machine()}'),
+            ('版本', f'{VERSION} · {display_architecture(platform.machine())}'),
             ('进程', f'{os.path.basename(sys.executable)} · PID {os.getpid()}'),
-            ('CPU', f'{self.hardware.cpu} · {self.statistics.cores} 个逻辑核心'),
+            ('CPU', f'{self.hardware.cpu.strip()} · {self.statistics.cores} 个逻辑核心'),
             ('GPU', self.hardware.gpu),
             ('系统', platform.platform())])
 

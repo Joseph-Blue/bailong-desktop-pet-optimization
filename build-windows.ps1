@@ -4,7 +4,7 @@
 .SYNOPSIS
 检查并补齐 Windows 构建依赖，生成完整目录包，可选 ZIP。
 .DESCRIPTION
-自动寻找已安装的 64 位 Python 3.11～3.13；不下载 Python，不修改系统执行策略。
+自动选择 64 位 Python 3.11～3.13。
 使用独立虚拟环境，仅当依赖缺失、版本不符或 pip check 失败时安装依赖。
 .PARAMETER Python
 首次建环境所用的解释器路径或命令名；不传时检查 PATH 和 py 启动器登记的解释器。
@@ -13,7 +13,7 @@
 .PARAMETER SkipInstall
 只检查已有环境；缺依赖时停止，不创建环境或安装依赖。
 .PARAMETER Zip
-构建成功后生成完整 ZIP 和 SHA256 校验文件；不上传。
+生成完整 ZIP 和 SHA256 校验文件。
 #>
 [CmdletBinding()]
 param(
@@ -31,9 +31,20 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
     throw '请在 Windows PowerShell 5.1 或 Windows 上的 PowerShell 7+ 中运行此脚本。'
 }
 
+$PythonInstallHint = "手动安装 Python 3.13：`nwinget install --id Python.Python.3.13 --exact`n安装后重新打开终端。"
+
 function Invoke-Checked([string]$Program, [string[]]$Arguments) {
     & $Program @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$Program 执行失败，退出码 $LASTEXITCODE" }
+}
+
+function Assert-BuildPython([string]$Program, [bool]$Existing = $false) {
+    & $Program 'work/build_common.py'
+    if ($LASTEXITCODE -ne 0) {
+        $Message = "Python 不符合构建要求（退出码 $LASTEXITCODE）。`n$PythonInstallHint"
+        if ($Existing) { $Message += "`n移走 .venv-build-windows 后重新运行构建脚本。" }
+        throw $Message
+    }
 }
 
 function Find-BuildPython {
@@ -60,7 +71,7 @@ function Find-BuildPython {
             if ($LASTEXITCODE -eq 0) { return $Candidate }
         } catch { Write-Verbose "解释器不可用：$Candidate" }
     }
-    throw '未找到可用的 64 位 Python 3.11～3.13；请安装后重试，或用 -Python 指定 python.exe。'
+    throw "未找到 64 位 Python 3.11～3.13。`n$PythonInstallHint`n已有合适版本时，用 -Python 指定 python.exe。"
 }
 
 $VenvPython = Join-Path $PSScriptRoot '.venv-build-windows/Scripts/python.exe'
@@ -71,11 +82,11 @@ if (-not $HasVenv) {
     # Resolve before changing directory so caller-relative executable paths work.
     $PythonCommand = Get-Command -Name $Python -CommandType Application -ErrorAction SilentlyContinue
     if (-not $PythonCommand) {
-        throw "找不到 Python：$Python；请用 -Python 指定 64 位 Python 3.11～3.13 的 python.exe。"
+        throw "找不到 Python：$Python`n$PythonInstallHint"
     }
     $Python = ($PythonCommand | Select-Object -First 1).Source
 } elseif ($PSBoundParameters.ContainsKey('Python')) {
-    Write-Warning '-Python 只用于创建环境；本次复用 .venv-build-windows。更换解释器请先移走该目录。'
+    Write-Host '复用 .venv-build-windows；-Python 仅用于首次创建。'
 }
 
 if (-not $FFmpeg) { $FFmpeg = $env:BAILONG_BUILD_FFMPEG }
@@ -90,10 +101,10 @@ try {
     $env:PYINSTALLER_CONFIG_DIR = Join-Path $PSScriptRoot '.build-windows/pyinstaller-cache'
     if (-not $HasVenv) {
         Write-Host "创建构建环境，使用 Python：$Python"
-        Invoke-Checked $Python @('work/build_common.py')
+        Assert-BuildPython $Python
         Invoke-Checked $Python @('-m', 'venv', '.venv-build-windows')
     }
-    Invoke-Checked $VenvPython @('work/build_common.py')
+    Assert-BuildPython $VenvPython $true
     Write-Host '检查构建依赖及版本...'
     & $VenvPython 'work/check_build_dependencies.py'
     $DependencyExit = $LASTEXITCODE
@@ -114,7 +125,7 @@ try {
     } else {
         Write-Host '依赖已满足，跳过安装。'
     }
-    Write-Host '开始打包程序、素材和 FFmpeg...'
+    Write-Host '打包程序、素材和 FFmpeg...'
     $BuildArgs = @('work/build_windows.py')
     if ($FFmpeg) { $BuildArgs += @('--ffmpeg', $FFmpeg) }
     if ($Zip) { $BuildArgs += '--zip' }

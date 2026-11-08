@@ -3,10 +3,20 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from diagnostic_identity import parse_hardware, cli_status
+from diagnostic_identity import parse_hardware, cli_status, display_architecture, desktop_summary
 
 
 class IdentityTests(unittest.TestCase):
+    def test_architecture_aliases_have_consistent_display(self):
+        for machine in ('AMD64', 'amd64', 'x64', 'x86_64'):
+            self.assertEqual(display_architecture(machine), 'x86_64')
+        self.assertEqual(display_architecture('arm64'), 'arm64')
+
+    def test_desktop_processes_are_grouped_without_hiding_errors(self):
+        status = 'ChatGPT.exe · PID 1、ChatGPT.exe · PID 2、Codex.exe · PID 3'
+        self.assertEqual(desktop_summary(status), 'ChatGPT.exe（2 个进程） · Codex.exe（1 个进程）')
+        self.assertEqual(desktop_summary('读取失败：无法核对桌面应用路径'), '读取失败：无法核对桌面应用路径')
+
     def test_mac_gpu_model_without_display_details(self):
         output = json.dumps({'SPDisplaysDataType': [
             {'sppci_model': 'Apple M5 Pro', 'spdisplays_ndrvs': [{'serial': 'not-for-display'}]},

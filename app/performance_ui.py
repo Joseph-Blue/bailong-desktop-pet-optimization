@@ -1,7 +1,7 @@
 """Shared native window and layout rules for performance panels."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
-from PySide6.QtWidgets import QBoxLayout, QWidget
+from PySide6.QtWidgets import QBoxLayout, QWidget, QSizePolicy
 
 
 def configure_window(window):
@@ -21,11 +21,15 @@ class Columns(QWidget):
         self.columns = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
         self.columns.setContentsMargins(0, 0, 0, 0)
         self.columns.setSpacing(18)
+        # Long labels must not impose a larger minimum width on either column.
+        for panel in (left, right):
+            panel.setMinimumWidth(0)
+            panel.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.columns.addWidget(left, 1)
         self.columns.addWidget(right, 1)
 
     def resizeEvent(self, event):
-        threshold = self.fontMetrics().horizontalAdvance('汉') * 44
+        threshold = self.fontMetrics().horizontalAdvance('汉') * 40
         direction = (QBoxLayout.Direction.LeftToRight if event.size().width() >= threshold
                      else QBoxLayout.Direction.TopToBottom)
         self.columns.setDirection(direction)

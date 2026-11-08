@@ -35,7 +35,15 @@ Windows 默认脚本先检查已安装依赖，缺失、版本不符或依赖关
 
 ## Windows：PowerShell 5.1／7+
 
-安装 64 位 Python 3.11～3.13，在系统自带的 **Windows PowerShell 5.1** 或 **PowerShell 7+（pwsh）** 中进入仓库，无需专门安装 PowerShell 7：
+未安装合适版本时，手动执行：
+
+```powershell
+winget install --id Python.Python.3.13 --exact
+```
+
+安装后重新打开终端。构建脚本只显示这条建议，不调用 winget。
+
+使用 64 位 Python 3.11～3.13，在系统自带的 **Windows PowerShell 5.1** 或 **PowerShell 7+（pwsh）** 中进入仓库，无需专门安装 PowerShell 7：
 
 ```powershell
 ./build-windows.ps1

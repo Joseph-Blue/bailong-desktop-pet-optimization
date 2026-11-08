@@ -5,9 +5,23 @@ from pathlib import Path
 import shlex
 import shutil
 import sys
+import re
+from collections import Counter
 
 import psutil
 from PySide6.QtCore import QObject, QProcess, QTimer, Signal
+
+
+def display_architecture(machine):
+    return 'x86_64' if machine.lower() in ('amd64', 'x86_64', 'x64') else machine
+
+
+def desktop_summary(status):
+    entries = [re.fullmatch(r'(.+?) · PID (\d+)', entry) for entry in status.split('、')]
+    if not all(entries):
+        return status
+    counts = Counter(entry[1] for entry in entries)
+    return ' · '.join(f'{name}（{count} 个进程）' for name, count in counts.items())
 
 
 def cpu_model():

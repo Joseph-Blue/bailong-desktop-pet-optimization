@@ -3,7 +3,7 @@ from PySide6.QtCore import Qt, QRectF
 from PySide6.QtGui import QPainter, QPalette
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
                                QComboBox, QLineEdit, QSlider, QCheckBox, QDialogButtonBox,
-                               QWidget, QGroupBox, QStyle, QStyleOptionFocusRect)
+                               QWidget, QStyle, QStyleOptionFocusRect)
 from performance_ui import Columns, configure_window
 from performance_preferences import (MIN_BUFFER_FRAMES, MAX_BUFFER_FRAMES,
                                      DEFAULT_RESOLUTION, DEFAULT_BUFFER_FRAMES, DEFAULT_FPS_LIMIT)
@@ -41,15 +41,16 @@ class PerformanceSettings(QDialog):
         configure_window(self)
         self.pet = pet
         self.setWindowTitle('性能设置')
-        self.resize(840, 270)
+        self.resize(740, 250)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 16, 18, 16)
-        layout.setSpacing(12)
-        playback = QGroupBox('播放')
-        buffer = QGroupBox('预加载')
+        layout.setContentsMargins(24, 24, 24, 20)
+        layout.setSpacing(20)
+        playback = QWidget()
+        buffer = QWidget()
         forms = [QFormLayout(group) for group in (playback, buffer)]
         for form in forms:
-            form.setVerticalSpacing(14)
+            form.setContentsMargins(0, 0, 0, 0)
+            form.setVerticalSpacing(12)
             form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
             form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.quality = QComboBox()
@@ -69,25 +70,16 @@ class PerformanceSettings(QDialog):
         self.buffer_slider.setRange(MIN_BUFFER_FRAMES, MAX_BUFFER_FRAMES)
         self.buffer_slider.setSingleStep(1)
         self.buffer_slider.setPageStep(6)
-        self.buffer_slider.setTickInterval(39)
-        self.buffer_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.buffer_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.buffer_slider.setValue(pet.buffer_capacity)
         self.buffer_slider.setAccessibleName('动画缓冲帧数')
-        track = QVBoxLayout()
-        track.setSpacing(0)
-        track.addWidget(self.buffer_slider)
-        limits = QHBoxLayout()
-        limits.addWidget(QLabel('6 帧'))
-        limits.addStretch()
-        limits.addWidget(QLabel('240 帧'))
-        track.addLayout(limits)
         self.buffer_controls = QWidget()
         controls = QHBoxLayout(self.buffer_controls)
         controls.setContentsMargins(0, 0, 0, 0)
         controls.setSpacing(8)
         controls.addWidget(self.capacity)
         controls.addWidget(QLabel('帧'))
-        controls.addLayout(track, 1)
+        controls.addWidget(self.buffer_slider, 1)
         self.preload = ToggleSwitch()
         self.preload.setAccessibleName('整段动画预加载（不推荐）')
         self.preload.setChecked(pet.preload_whole)
@@ -95,12 +87,19 @@ class PerformanceSettings(QDialog):
         self.fps.setAccessibleName('运行帧率')
         forms[0].addRow('分辨率', self.quality)
         forms[0].addRow('运行帧率', self.fps)
-        forms[1].addRow('预加载帧数', self.buffer_controls)
+        forms[1].addRow('预加载帧数（6–240）', self.buffer_controls)
         toggle_row = QHBoxLayout()
-        toggle_row.addWidget(QLabel('整段动画预加载（不推荐）'))
-        toggle_row.addStretch()
         toggle_row.addWidget(self.preload)
-        forms[1].addRow(toggle_row)
+        self.preload_state = QLabel()
+        toggle_row.addWidget(self.preload_state)
+        toggle_row.addStretch()
+        forms[1].addRow('整段动画预加载（不推荐）', toggle_row)
+        # Match both control rows even when a platform's slider is shorter.
+        row_height = max(self.quality.sizeHint().height(), self.fps.sizeHint().height(),
+                         self.capacity.sizeHint().height(), self.preload.height())
+        for control in (self.quality, self.fps, self.buffer_controls):
+            control.setMinimumHeight(row_height)
+        toggle_row.setContentsMargins(0, max(0, (row_height - self.preload.height()) // 2), 0, 0)
         self.columns = Columns(playback, buffer)
         layout.addWidget(self.columns)
         layout.addStretch()
@@ -140,6 +139,7 @@ class PerformanceSettings(QDialog):
         self.capacity.setText(str(value))
 
     def refresh(self):
+        self.preload_state.setText('已开启' if self.preload.isChecked() else '已关闭')
         self.buffer_controls.setEnabled(not self.preload.isChecked())
         selected = (self.quality.currentData(), self.capacity_value(), self.fps.currentData(), self.preload.isChecked())
         saved = (self.pet.resolution, self.pet.buffer_capacity, self.pet.fps_limit, self.pet.preload_whole)
