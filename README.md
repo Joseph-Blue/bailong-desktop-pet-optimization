@@ -48,7 +48,7 @@
 
 应用包在目标系统构建。macOS / Linux 使用本平台 FFmpeg，跳过 Windows `.exe`；可通过 `--ffmpeg` 指定，或使用 imageio-ffmpeg 提供的本机版本。Linux 的 `--install-deps` 会安装系统依赖。
 
-Windows x86_64 是本次本机构建平台。macOS Apple Silicon arm64、Debian / Ubuntu、Fedora / RHEL、Arch x86_64 使用独立自动构建任务。构建和启动检查结果记录在各平台发布说明中。
+Windows x86_64 是本次本机构建平台。macOS Apple Silicon arm64、Debian / Ubuntu、Fedora / RHEL、Arch x86_64 使用独立自动构建任务，完成后上传到同一 Release。
 
 ## 代码位置
 

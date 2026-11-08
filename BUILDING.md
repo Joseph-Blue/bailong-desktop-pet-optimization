@@ -217,7 +217,7 @@ GitHub Actions 的 **Build macOS and Linux packages** 工作流接受 Release �
 | Linux Fedora / RHEL x86_64 | Rocky Linux 9 |
 | Linux Arch x86_64 | Arch Linux |
 
-每项构建执行 EXE／可执行文件内置离线自检，随附件提供检查报告和 SHA256。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。GUI 检查采用离屏模式，原生桌面的置顶、输入法和 Wayland 行为需在相应桌面验证。
+工作流只编译、打包和上传，附件提供 SHA256。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。
 
 ## 性能设置
 
