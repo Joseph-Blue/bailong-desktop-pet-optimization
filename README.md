@@ -27,7 +27,7 @@
 .\build-windows.ps1 -Zip
 ```
 
-脚本创建 `.venv-build-windows`，检查并补齐 Python 依赖，生成完整目录包、ZIP 和 SHA256。缺少合适 Python 时给出手动安装命令，例如 `winget install --id Python.Python.3.13 --exact`。
+脚本创建 `.venv-build-windows`，检查并补齐 Python 依赖，生成完整目录包和 ZIP。缺少合适 Python 时给出手动安装命令，例如 `winget install --id Python.Python.3.13 --exact`。
 
 仓库追踪 `tools/ffmpeg.exe`：FFmpeg **7.1.5** + libvpx **1.17.0**，面向 Windows x86_64，保留 WebM / VP9 透明解码、缩放、帧率调整和 RGBA 输出。普通打包直接使用它。重编译见 [精简 FFmpeg](BUILDING.md#精简-ffmpeg)。
 

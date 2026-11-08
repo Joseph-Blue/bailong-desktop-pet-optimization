@@ -47,7 +47,7 @@ winget install --id Python.Python.3.13 --exact
 
 ```powershell
 ./build-windows.ps1
-# 同时生成完整本地 ZIP 和 SHA256 校验文件
+# 同时生成完整本地 ZIP
 ./build-windows.ps1 -Zip
 # 指定解释器及解码器；参数是单个文件路径，不附加命令参数
 ./build-windows.ps1 -Python 'C:\Python313\python.exe' -FFmpeg 'C:\tools\ffmpeg.exe'
@@ -64,7 +64,7 @@ winget install --id Python.Python.3.13 --exact
 3. 检查 pip 和 `requirements-build.txt`（含 `requirements.txt`）中的锁定版本；版本满足后再执行 `pip check` 检查依赖关系。
 4. 依赖缺失、版本不符或关系冲突时，默认调用 pip 安装锁定依赖；pip 缺失时先通过 Python 自带的 `ensurepip` 补齐。安装后重新检查，仍有错误则中止。依赖已满足时跳过安装；`-SkipInstall` 遇到缺失或冲突只报错。
 5. 校验素材及 FFmpeg 的 `libvpx-vp9` 解码器，再用 PyInstaller 打包，整理素材、音效和解码器。
-6. 使用 `-Zip` 时压缩刚生成的整个 `BailongPet` 目录，校验 ZIP 并生成 SHA256 文件。
+6. 使用 `-Zip` 时压缩刚生成的整个 `BailongPet` 目录。
 
 `Get-Help .\build-windows.ps1 -Detailed` 可查看参数说明。脚本不会自动下载角色素材；请先按上文准备。Windows 默认使用仓库内的 `tools/ffmpeg.exe` 精简解码器。
 
@@ -76,7 +76,7 @@ winget install --id Python.Python.3.13 --exact
 
 虚拟环境：`.venv-build-windows/`。产物：`发布包/build-v0.5.1-opt.14/BailongPet/`。双击其中的 `BailongPet.exe`。必须携带整个目录，包括 `_internal/`、`tools/`、`outputs/`、`app/sounds/`，不能单独复制 EXE。
 
-在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.14-windows-x86_64.zip` 和同名 `.zip.sha256` 文件。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；本分支 Release 使用新构建包，依赖许可一并收集。
+在 x64 解释器下使用 `-Zip`，另生成 `发布包/bailong-desktop-pet-v0.5.1-opt.14-windows-x86_64.zip`。ZIP 内保留顶层 `BailongPet/`，解压后直接使用。相同版本再次构建会替换该版本的目录包和 ZIP；不要在构建产物内保存唯一一份用户数据。本地脚本不自动上传；本分支 Release 使用新构建包，依赖许可一并收集。
 
 `build-windows.ps1` 调用独立的 `work/build_windows_optimized.py`，整理完整目录包。作者原版 `work/build_windows.py` 保留在原路径，继续与 `work/build_release.py` 搭配使用。两套入口并存，自动化入口不调用原发行脚本。
 
@@ -217,7 +217,7 @@ GitHub Actions 的 **Build macOS and Linux packages** 工作流接受 Release �
 | Linux Fedora x86_64 | Fedora 45 |
 | Linux Arch x86_64 | Arch Linux |
 
-工作流只编译、打包和上传，附件提供 SHA256。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。
+工作流只编译、打包和上传程序压缩包。macOS 包进行 ad-hoc 签名，未做 Apple 公证。Linux 包保留符号链接，以 `.tar.gz` 交付；运行库版本记录在 `BUILD_INFO.json`。
 
 ## 性能设置
 

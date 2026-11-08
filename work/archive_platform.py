@@ -1,6 +1,5 @@
-"""Archive a platform package with a SHA256 sidecar."""
+"""Archive a platform package."""
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import platform
@@ -39,9 +38,6 @@ def main():
         archive = artifacts / (stem + '.tar.gz')
         with tarfile.open(archive, 'w:gz', dereference=False) as bundle:
             bundle.add(output, arcname=output.name)
-    with archive.open('rb') as stream:
-        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    Path(str(archive)+'.sha256').write_text(f'{digest}  {archive.name}\n', encoding='utf-8')
     print(archive)
 
 

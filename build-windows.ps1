@@ -13,7 +13,7 @@
 .PARAMETER SkipInstall
 只检查已有环境；缺依赖时停止，不创建环境或安装依赖。
 .PARAMETER Zip
-生成完整 ZIP 和 SHA256 校验文件。
+生成完整 ZIP。
 #>
 [CmdletBinding()]
 param(
