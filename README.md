@@ -8,7 +8,7 @@
 
 私有仓库 [Release](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases) 提供 Windows x86_64、macOS arm64 和 Debian / Arch / Fedora x86_64 五种完整运行包；也可按构建说明在目标系统本地构建。
 
-opt.23 修复任务气泡空白、性能设置改为即时生效、关闭角色窗口系统阴影，并为构建接入素材自动下载；应用包尚未构建或发布。
+opt.23 修复任务气泡空白、性能设置改为即时生效、关闭角色窗口系统阴影，并为构建接入素材自动下载；macOS Apple Silicon 本地产物已更新，约 292 MB；应用 Release 尚未发布，界面效果待实机验收。
 
 素材由 **jingh12312-rgb** 原作者提供。本仓库的[独立素材包](https://github.com/Joseph-Blue/bailong-desktop-pet-optimization/releases/tag/v0.5.1-opt.assets.1)仅整理原始动画、清单及来源说明。所有构建脚本默认使用仅替换四段动画的[修复素材包](docs/修复素材备选包.md)，原始包保留供手动选择。下载私有仓库附件需要具有仓库读取权限的 GitHub 登录或 token。Windows EXE 与 macOS App 图标统一使用修复 idle 的第一帧。详见 [素材来源](ASSETS.md)。
 
@@ -28,7 +28,7 @@ opt.23 修复任务气泡空白、性能设置改为即时生效、关闭角色�
 
 ## Windows 构建
 
-需要 **64 位 Python 3.11～3.13**、**PowerShell 5.1 或 7+**。直接运行以下命令；缺少动画时会自动下载原作者素材，已有素材保留：
+需要 **64 位 Python 3.11～3.13**、**PowerShell 5.1 或 7+**。直接运行以下命令；默认自动准备修复 WebM 素材，显示大小、百分比和网速，已有动画保留：
 
 ```powershell
 .\build-windows.ps1 -Zip
@@ -53,7 +53,7 @@ opt.13 Windows 完整包约 **191.76 MiB ZIP / 256.67 MiB 解压后**，包含�
 | Fedora / RHEL 系 | `bash build-linux-fedora.sh --install-deps` |
 | Arch 系 | `bash build-linux-arch.sh --install-deps` |
 
-应用包在目标系统构建。macOS / Linux 使用本平台 FFmpeg，跳过 Windows `.exe`；可通过 `--ffmpeg` 指定，或使用 imageio-ffmpeg 提供的本机版本。Linux 的 `--install-deps` 会安装系统依赖。
+应用包在目标系统构建。macOS 默认自动编译并复用本平台精简 FFmpeg，需要 Xcode Command Line Tools 与 pkg-config（`brew install pkgconf`）；可通过 `--ffmpeg` 指定。Linux 使用本平台 FFmpeg，跳过 Windows `.exe`。Linux 的 `--install-deps` 会安装系统依赖。
 
 各入口均自动选择 64 位 Python 3.11～3.13，并按需补齐虚拟环境依赖。参数对应：Windows `-Python` / `-FFmpeg` / `-SkipInstall` / `-Archive`（或 `-Zip`），Bash `--python` / `--ffmpeg` / `--skip-install` / `--archive`。压缩产物：Windows、macOS 为 ZIP，Linux 为保留符号链接的 tar.gz；均只在本地生成。
 

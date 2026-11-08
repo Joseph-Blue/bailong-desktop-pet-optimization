@@ -50,7 +50,8 @@ def main():
         required.append('nasm')
     missing = [tool for tool in required if not shutil.which(tool)]
     if missing:
-        parser.error('缺少编译工具：' + ', '.join(missing))
+        hint = '；macOS 安装命令：xcode-select --install；brew install pkgconf' if sys.platform == 'darwin' else ''
+        parser.error('缺少编译工具：' + ', '.join(missing) + hint)
     target = args.target if windows else f'{sys.platform}-{arch}'
     work = args.work_dir.resolve()
     work.mkdir(parents=True, exist_ok=True)

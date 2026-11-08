@@ -26,8 +26,8 @@
 ### 素材与解释器
 
 1. 使用 **64 位 Python 3.11～3.13**。解释器版本和架构决定产物；不交叉编译，不自动构建另一种架构。
-2. 构建会自动补齐 `outputs/白龙桌宠素材` 的清单和引用文件；已有文件不覆盖。素材来自 **jingh12312-rgb** 的 [v0.5.1 原始发布](https://github.com/jingh12312-rgb/bailong-desktop-pet/releases/tag/v0.5.1)。作者不在 Git 中存放 `outputs`，因此使用 Release 下载而非 clone；各平台共用原始 WebM。
-3. FFmpeg 选择顺序为：脚本 `--ffmpeg`／`-FFmpeg` 参数、`BAILONG_BUILD_FFMPEG` 环境变量、仓库 `tools/ffmpeg[.exe]`、`imageio-ffmpeg` 包提供的本机二进制。跨平台复制素材时不要把 Windows 的 ffmpeg.exe 当作 macOS／Linux 解码器。自备 FFmpeg 必须能在构建机器运行，并包含 `libvpx-vp9`。
+2. 构建会自动补齐 `outputs/白龙桌宠素材` 的清单和引用文件；已有动画文件保留，播放清单随默认修复包更新。素材来自 **jingh12312-rgb** 的 [v0.5.1 原始发布](https://github.com/jingh12312-rgb/bailong-desktop-pet/releases/tag/v0.5.1)。作者不在 Git 中存放 `outputs`，因此使用 Release 下载而非 clone；各平台共用 31 段原始 WebM 与 4 段修复 WebM。
+3. 显式 `--ffmpeg`／`-FFmpeg` 参数和 `BAILONG_BUILD_FFMPEG` 优先。macOS 默认使用 `.build/ffmpeg/darwin-<架构>/bin/ffmpeg` 精简版，缺失时自动编译、后续复用。其他平台依次使用仓库 `tools/ffmpeg[.exe]`、Linux 本地精简构建产物、`imageio-ffmpeg` 包提供的本机二进制。跨平台复制素材时不要把 Windows 的 ffmpeg.exe 当作 macOS／Linux 解码器。自备 FFmpeg 必须能在构建机器运行，并包含 `libvpx-vp9`。
 
 所有平台入口先检查已安装依赖，缺失、版本不符或依赖关系冲突时才通过 pip 补齐。没有本地缓存时安装需要网络；都不改系统 Python 的包。`imageio-ffmpeg` 只用于提供构建时的 FFmpeg，运行包不需要 Python 环境。构建目录只包含清单引用的动画，不复制用户历史、状态文件或整个源码目录。
 
@@ -46,20 +46,21 @@ Windows 使用 PowerShell，其他平台使用 Bash。共同参数如下：
 
 ## 素材自动下载
 
-Windows PowerShell、macOS Bash、三类 Linux Bash 入口及对应 Python 构建入口共用 `work/fetch_release_assets.py`。作者原有 `work/build_windows.py` 与 `work/build_release.py` 也接入该逻辑。默认使用四段 Alpha 修复包。已有修复清单及全部引用动画时不联网；本地仍是原版清单或缺少素材时下载修复包，更新清单并补齐缺失动画，保留已有原始动画。RPM 和压缩脚本使用已生成的完整目录包，不另下载源素材。
+Windows PowerShell、macOS Bash、三类 Linux Bash 入口及对应 Python 构建入口共用 `work/fetch_release_assets.py`。作者原有 `work/build_windows.py` 与 `work/build_release.py` 也接入该逻辑。默认使用四段 Alpha 修复包。已有修复清单及全部引用动画时不联网；本地仍是原版／旧 APNG 清单或缺少素材时下载修复包，更新清单并补齐缺失动画，保留已有原始动画。RPM 和压缩脚本使用已生成的完整目录包，不另下载源素材。
 
-- 默认下载本私有仓库 **`v0.5.1-opt.assets.repaired.1`** 的 `bailong-repaired-v0.5.1-assets.zip`。使用 `GH_TOKEN`／`GITHUB_TOKEN` 或 GitHub CLI 登录，账号需要仓库读取权限。未登录时不会改用原版素材。
+- 默认下载本私有仓库 **`v0.5.1-opt.assets.repaired.2`** 的 `bailong-repaired-v0.5.1-assets.zip`。使用 `GH_TOKEN`／`GITHUB_TOKEN` 或 GitHub CLI 登录，账号需要仓库读取权限。未登录时不会改用原版素材。
+- 下载显示已下载／总大小（MB）、百分比和实时网速（MB/s），token 与 GitHub CLI 登录使用相同进度显示；不执行 SHA-256 校验。
 - 下载包保留在 `.build/downloads/`。可用 `ASSET_REPOSITORY`、`ASSET_RELEASE_TAG` 和 `ASSET_FILE_NAME` 显式选择素材来源；访问错误直接报出，不隐藏失败。
 - `--skip-install`／`-SkipInstall` 只跳过依赖安装；要离线构建，先准备完整素材及依赖。
 - GitHub Actions 继续使用当前仓库 token，下载相同素材包。素材、账号数据和下载缓存不提交 Git。
 
-单独准备素材：`python work/fetch_release_assets.py`。重新制作独立素材 ZIP：`python work/package_assets.py`，默认输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；只包含清单引用的 31 段原始 WebM、4 段修复 APNG、素材清单和作者来源说明，不包含程序或运行库。来源与原作者说明见 [ASSETS.md](ASSETS.md)。
+单独准备素材：`python work/fetch_release_assets.py`。重新制作独立素材 ZIP：`python work/package_assets.py`，默认输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；只包含清单引用的 31 段原始 WebM、4 段修复 WebM、素材清单和作者来源说明，不包含程序或运行库。来源与原作者说明见 [ASSETS.md](ASSETS.md)。
 
 ## 修复备选素材与应用图标
 
-默认自动下载使用修复包。离线准备时，按 [修复素材备选包说明](docs/修复素材备选包.md) 放入完整修复目录和清单；已有修复清单及引用文件齐全时不会重新下载。备选包包含 31 段原始 WebM 与 4 段无损 APNG，播放走现有 FFmpeg／Pillow 路径。
+默认自动下载使用修复包。离线准备时，按 [修复素材备选包说明](docs/修复素材备选包.md) 放入完整修复目录和清单；已有修复清单及引用文件齐全时不会重新下载。备选包包含 31 段原始 WebM 与 4 段修复 WebM，统一走现有 FFmpeg 的 libvpx-vp9 → RGBA 透明解码路径。
 
-重新封装备选包：`python work/package_assets.py --repaired-animations /path/to/animations`，该目录应包含 `idle.png`、`idle2.png`、`drag.png`、`landing.png` 四个 APNG。输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；原始包不会覆盖。
+重新封装备选包：`python work/package_assets.py --repaired-animations /path/to/animations`，该目录应包含 `idle.webm`、`idle2.webm`、`drag.webm`、`landing.webm` 四个透明 WebM；原有完整素材需先放在本地 outputs。输出 `.build/assets/bailong-repaired-v0.5.1-assets.zip`；原始包不会覆盖。
 
 Windows 优化入口、作者 Windows 原入口与 macOS 入口构建时均使用修复 idle 第一帧作为应用图标。源图为 `app/icons/repaired-idle.png`，`work/build_icons.py` 生成 `.build/icons/BailongPet.ico`／`BailongPet.icns` 并通过 PyInstaller `--icon` 接入。不要求用户安装图标工具，也不更换动画素材。单独生成图标：`python work/build_icons.py`。
 
@@ -153,7 +154,7 @@ winget install --id Python.Python.3.13 --exact
 
 ## macOS：Bash
 
-先安装 Python 3.11～3.13 与 Xcode Command Line Tools（`xcode-select --install`），然后：
+先安装 Python 3.11～3.13、Xcode Command Line Tools（`xcode-select --install`）及 pkg-config（`brew install pkgconf`），然后：
 
 ```bash
 bash build-macos.sh --python python3.13
@@ -164,6 +165,8 @@ bash build-macos.sh --ffmpeg /absolute/path/to/ffmpeg
 # 使用已经安装依赖的环境重新打包
 BUILD_VENV="$PWD/.venv" bash build-macos.sh --skip-install
 ```
+
+macOS Bash 与 Python 入口都默认自动准备精简 FFmpeg，只保留 WebM / VP9 Alpha 解码、缩放、帧率调整和 RGBA 输出。首次下载固定版本源码并编译，后续复用本机架构产物；编译失败直接报错，不回退通用版。自备解码器仍用 `--ffmpeg`。`--skip-install` 只跳过 Python 依赖安装，首次精简解码器编译仍会执行。
 
 虚拟环境默认 `.build/venvs/macos/`。产物 `dist-macos/BailongPet.app`，含素材与 FFmpeg，并在资源／Info.plist 更新后进行本地 ad-hoc 签名。没有 Developer ID 签名或公证。Apple Silicon Python 构建 arm64；Intel Python 在 Intel Mac 上构建 x86_64，不自动生成 universal 包。当前只执行过 Apple Silicon 构建。
 

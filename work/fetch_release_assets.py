@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import urllib.request
 import zipfile
 
@@ -12,14 +13,14 @@ ROOT = Path(__file__).resolve().parents[1]
 UPSTREAM_REPOSITORY = 'jingh12312-rgb/bailong-desktop-pet'
 UPSTREAM_TAG = 'v0.5.1'
 ASSET_REPOSITORY = 'Joseph-Blue/bailong-desktop-pet-optimization'
-ASSET_TAG = 'v0.5.1-opt.assets.repaired.1'
+ASSET_TAG = 'v0.5.1-opt.assets.repaired.2'
 ASSET_NAME = 'bailong-repaired-v0.5.1-assets.zip'
 REPAIRED_IDS = ('idle', 'idle2', 'drag', 'landing')
 
 
 def uses_repaired_animations(manifest):
     paths = {item['id']: item.get('playbackFile') for item in animation_items(manifest)}
-    return all(paths.get(name) == f'修复APNG/{name}.png' for name in REPAIRED_IDS)
+    return all(paths.get(name) == f'修复WebM/{name}.webm' for name in REPAIRED_IDS)
 
 
 def repaired_release_selected():
@@ -66,24 +67,40 @@ class DownloadRedirect(urllib.request.HTTPRedirectHandler):
         return redirected
 
 
+def copy_download(response, output, total):
+    downloaded = last_bytes = 0
+    last_time = time.monotonic()
+    print(f'下载：0.0 / {total / 1_000_000:.1f} MB  0.0%  0.00 MB/s', end='\r', flush=True)
+    while chunk := response.read(256 * 1024):
+        output.write(chunk)
+        downloaded += len(chunk)
+        now = time.monotonic()
+        if now - last_time >= 0.5 or downloaded == total:
+            speed = (downloaded - last_bytes) / max(now - last_time, 0.001)
+            print(f'下载：{downloaded / 1_000_000:.1f} / {total / 1_000_000:.1f} MB'
+                  f'  {downloaded / total * 100:.1f}%  {speed / 1_000_000:.2f} MB/s    ',
+                  end='\r', flush=True)
+            last_time, last_bytes = now, downloaded
+    print(flush=True)
+
+
 def download_assets():
     token = os.environ.get('GH_TOKEN') or os.environ.get('GITHUB_TOKEN')
     use_gh = bool(not token and shutil.which('gh') and subprocess.run(
         ['gh', 'auth', 'status', '--hostname', 'github.com'],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0)
+    if use_gh:
+        # 仅在内存中使用现有 CLI 登录，让两种认证共用流式下载与进度显示。
+        token = subprocess.check_output(['gh', 'auth', 'token', '--hostname', 'github.com'], text=True).strip()
     repository = os.environ.get('ASSET_REPOSITORY') or ASSET_REPOSITORY
     tag = asset_release_tag()
     print(f'准备动画素材，从 {repository} / {tag} 获取；原作者：{UPSTREAM_REPOSITORY}。', flush=True)
     headers = {'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28'}
     if token:
         headers['Authorization'] = 'Bearer ' + token
-    if use_gh:
-        release = json.loads(subprocess.check_output(
-            ['gh', 'release', 'view', tag, '--repo', repository, '--json', 'assets'], text=True))
-    else:
-        request = urllib.request.Request(f'https://api.github.com/repos/{repository}/releases/tags/{tag}', headers=headers)
-        with urllib.request.urlopen(request, timeout=60) as response:
-            release = json.load(response)
+    request = urllib.request.Request(f'https://api.github.com/repos/{repository}/releases/tags/{tag}', headers=headers)
+    with urllib.request.urlopen(request, timeout=60) as response:
+        release = json.load(response)
     asset_name = os.environ.get('ASSET_FILE_NAME') or ASSET_NAME
     asset = next((item for item in release['assets'] if item['name'] == asset_name), None)
     if asset is None and repository == UPSTREAM_REPOSITORY:
@@ -96,15 +113,11 @@ def download_assets():
     # 下载成功才留下缓存，避免下次构建使用中断的 ZIP。
     with tempfile.TemporaryDirectory(prefix='assets-', dir=work) as temporary:
         archive = Path(temporary) / Path(asset['name']).name
-        if use_gh:
-            subprocess.run(['gh', 'release', 'download', tag, '--repo', repository,
-                            '--pattern', asset['name'], '--dir', temporary], check=True)
-        else:
-            headers['Accept'] = 'application/octet-stream'
-            url = asset['url'] if token else asset['browser_download_url']
-            request = urllib.request.Request(url, headers=headers)
-            with urllib.request.build_opener(DownloadRedirect()).open(request, timeout=120) as response, archive.open('wb') as out:
-                shutil.copyfileobj(response, out)
+        headers['Accept'] = 'application/octet-stream'
+        url = asset['url'] if token else asset['browser_download_url']
+        request = urllib.request.Request(url, headers=headers)
+        with urllib.request.build_opener(DownloadRedirect()).open(request, timeout=120) as response, archive.open('wb') as out:
+            copy_download(response, out, asset['size'])
         cached = work / archive.name
         archive.replace(cached)
     copied = 0

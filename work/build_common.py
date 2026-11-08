@@ -1,4 +1,4 @@
-"""Shared local packaging inputs with on-demand original artwork downloads."""
+"""Shared packaging inputs with repaired artwork and platform decoders."""
 import json
 import os
 from pathlib import Path
@@ -35,6 +35,13 @@ def build_inputs(ffmpeg_arg=None):
         explicit = ffmpeg_arg or os.environ.get('BAILONG_BUILD_FFMPEG')
         if explicit:
             ffmpeg = Path(explicit).expanduser().resolve()
+        elif sys.platform == 'darwin':
+            # macOS 本地与 CI 默认使用精简解码器；首次构建自动编译，后续复用。
+            arch = {'aarch64': 'arm64', 'amd64': 'x86_64'}.get(platform.machine().lower(), platform.machine().lower())
+            ffmpeg = ROOT / '.build/ffmpeg' / f'darwin-{arch}' / 'bin/ffmpeg'
+            if not ffmpeg.is_file():
+                print('首次构建：编译 macOS 精简 FFmpeg…', flush=True)
+                subprocess.run([sys.executable, str(ROOT / 'work/build_minimal_ffmpeg.py')], check=True)
         else:
             local = ROOT / 'tools' / ('ffmpeg.exe' if sys.platform == 'win32' else 'ffmpeg')
             if sys.platform == 'linux' and not local.is_file():

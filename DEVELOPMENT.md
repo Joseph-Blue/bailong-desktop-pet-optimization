@@ -6,7 +6,7 @@
 - 运行入口 `app/pet.py`，资源定位在 `app/platform_support.py`；有限预加载在 `app/frame_buffer.py`，FFmpeg 管道在 `app/video_frames.py`。
 - 加载路径：当前动作首批帧就绪后开始播放，解码线程按缓冲容量继续补帧；启动与动作切换不再等待整段动画解码完成，加载等待大幅缩短。整段预加载为可选项，默认关闭。
 - `work/fetch_release_assets.py` 统一准备四段修复素材包；所有应用构建入口（含作者原 Windows 构建及发行流程）接入，原版清单自动切换为修复包清单，已有动画文件保留。独立素材包由 `work/package_assets.py` 生成，来源见 ASSETS.md。
-- `work/build_common.py` 共用素材清单、FFmpeg 检查和目录整理；优化入口为 `work/build_windows_optimized.py`、`work/build_macos.py` 和 `work/build_linux.py`，指定目标系统及其打包选项，拒绝交叉编译。
+- `work/build_common.py` 共用素材清单、FFmpeg 检查和目录整理；优化入口为 `work/build_windows_optimized.py`、`work/build_macos.py` 和 `work/build_linux.py`，指定目标系统及其打包选项，拒绝交叉编译。macOS 默认自动编译并复用精简 FFmpeg；素材下载共用大小、百分比和网速显示。
 - Windows 自动化入口先通过 `work/check_build_dependencies.py` 检查锁定包，再执行 `pip check`；仅缺失或冲突时安装。`-Zip`／`--zip` 从新构建目录生成本地 ZIP，取代旧发行脚本在当前流程中的压缩职责。
 - 应用图标源为 `app/icons/repaired-idle.png`（修复 idle 第一帧），Windows/macOS 构建通过 `work/build_icons.py` 生成 ICO/ICNS；动画修复备选包按 `docs/修复素材备选包.md` 独立封装，所有脚本默认使用修复包。
 - 版本来源 `app/version.py`，同步维护 `VERSION.txt`、README、BUILDING 和 CHANGELOG。

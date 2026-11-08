@@ -43,20 +43,23 @@ def configure_mac_window(widget):
     window.setCollectionBehavior_(behavior|NSWindowCollectionBehaviorCanJoinAllSpaces|NSWindowCollectionBehaviorFullScreenAuxiliary)
 
 def mac_fullscreen():
-    try:
-        import Quartz as q
-        from AppKit import NSWorkspace
-        front=NSWorkspace.sharedWorkspace().frontmostApplication()
-        pid=front.processIdentifier()
-        if pid==os.getpid():return False
-        from desktop_visibility import covers_monitor
-        displays=q.CGGetActiveDisplayList(32,None,None)[1]
-        monitors=[]
-        for display in displays:
-            r=q.CGDisplayBounds(display);monitors.append((r.origin.x,r.origin.y,r.origin.x+r.size.width,r.origin.y+r.size.height))
-        for w in q.CGWindowListCopyWindowInfo(q.kCGWindowListOptionOnScreenOnly|q.kCGWindowListExcludeDesktopElements,q.kCGNullWindowID) or []:
-            if w.get(q.kCGWindowOwnerPID)!=pid or w.get(q.kCGWindowLayer)!=0:continue
-            b=w[q.kCGWindowBounds];r=(b['X'],b['Y'],b['X']+b['Width'],b['Y']+b['Height'])
-            return any(covers_monitor(r,m) for m in monitors)
-    except (ImportError,AttributeError,KeyError,TypeError):pass
+    import Quartz as q
+    from AppKit import NSScreen, NSWorkspace
+    from desktop_visibility import covers_monitor
+    front=NSWorkspace.sharedWorkspace().frontmostApplication()
+    if front is None or front.processIdentifier()==os.getpid():return False
+    pid=front.processIdentifier()
+    monitors=[]
+    for screen in NSScreen.screens():
+        r=q.CGDisplayBounds(screen.deviceDescription()['NSScreenNumber'])
+        insets=screen.safeAreaInsets()
+        # 刘海屏的系统全屏窗口位于安全区域内；Quartz 坐标的 Y 轴向下。
+        # 不用 visibleFrame，避免把普通保留菜单栏和 Dock 的最大化窗口当成全屏。
+        monitors.append((r.origin.x+insets.left,r.origin.y+insets.top,
+                         r.origin.x+r.size.width-insets.right,r.origin.y+r.size.height-insets.bottom))
+    for w in q.CGWindowListCopyWindowInfo(q.kCGWindowListOptionOnScreenOnly|q.kCGWindowListExcludeDesktopElements,q.kCGNullWindowID) or []:
+        if w.get(q.kCGWindowOwnerPID)!=pid or w.get(q.kCGWindowLayer)!=0:continue
+        b=w[q.kCGWindowBounds];r=(b['X'],b['Y'],b['X']+b['Width'],b['Y']+b['Height'])
+        # 同一应用的工具栏、浮层可排在全屏主窗口前，必须继续检查后续窗口。
+        if any(covers_monitor(r,m) for m in monitors):return True
     return False

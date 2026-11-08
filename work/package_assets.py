@@ -10,9 +10,10 @@ from fetch_release_assets import ROOT, ASSET_NAME, ensure_assets, animation_item
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repaired-animations', type=Path,
-                        help='含 idle/idle2/drag/landing.png 无损 APNG 的修复目录')
+                        help='含 idle/idle2/drag/landing.webm 的修复目录；其余素材来自本地 outputs')
     args = parser.parse_args()
-    ensure_assets()
+    if not args.repaired_animations:
+        ensure_assets()
     assets = ROOT / 'outputs/白龙桌宠素材'
     manifest = assets / '素材清单.json'
     data = json.loads(manifest.read_text(encoding='utf-8'))
@@ -20,10 +21,10 @@ def main():
     if args.repaired_animations:
         for item in animation_items(data):
             if item['id'] in ('idle', 'idle2', 'drag', 'landing'):
-                source = args.repaired_animations / f"{item['id']}.png"
+                source = args.repaired_animations / f"{item['id']}.webm"
                 if not source.is_file():
                     raise FileNotFoundError(source)
-                item['playbackFile'] = f"修复APNG/{item['id']}.png"
+                item['playbackFile'] = f"修复WebM/{item['id']}.webm"
                 replacements[item['playbackFile']] = source
     paths = animation_paths(data)
     repaired = uses_repaired_animations(data)
